@@ -22,7 +22,7 @@ import cv2
 JN = False
 
 # path to tiles (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_tiles = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/data_1/data_1_Position_0'
+path_to_tiles = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/data_1/data_1_Position_0'
 
 # results folder name, appended to tiles folder
 results_folder = '_annotated'
@@ -43,7 +43,7 @@ labels_dict = {-1: 'edge',
 show_label = ['l','d']
 
 # exit key(s)
-exit = ['q']
+exit_key = ['q']
 
 # threshold percentage of area needed to see edge cell
 edge_area_thresh = 0.7
@@ -98,9 +98,34 @@ if tiles:
                 show_half_size = input('please enter integer: ')
     
     # if show_half_size is smaller than cell_half_size, revert to showing entire tile
-    if show_half_size < cell_half_size:
+    if 0 < show_half_size < cell_half_size:
         show_half_size = 0
-        print('show_half_size too small, reverting to showing entire tile')    
+        print('show_half_size too small, reverting to showing entire tile')
+        
+#    # make sure there are no key conflicts
+#    show_conflict = True
+#    while show_conflict:
+#        if any(i in exit_key for i in show_label):
+#            print('ERROR: key conflict between exit_key and show_label')
+#            print('exit_key:\t', exit_key, '\nshow_label:\t', show_label)
+#            exit_key = input('enter new exit_key(s): ')
+#            exit_key = list(exit_key)
+#            pass
+#        else:
+#            break
+#        
+#    dict_conflict = True
+#    while dict_conflict:
+#        if any(i in exit_key for i in [str(j) for j in labels_dict.keys()]):
+#            print('ERROR: key conflict between exit_key and labels_dict')
+#            print('exit_key:\t', exit_key, '\nlabel_dict:\t', [i for i in labels_dict.keys()])
+#            exit_key = input('enter new exit_key(s): ')
+#            exit_key = list(exit_key)
+#            pass
+#        else:
+#            break
+#
+#    print('out of loop', exit_key, show_label)
 
     # create folders if they do not exsist
     if not os.path.isdir(results_folder_path):
@@ -132,7 +157,7 @@ if tiles:
     print()
 
     # exit key(s)
-    print('exit key(s):\n\t', exit)
+    print('exit key(s):\n\t', exit_key)
     print()
     
     # show label key(s)
@@ -305,7 +330,7 @@ for tile in tiles:
 #----------------------------------exit key-----------------------------------#
 
                 # if exit key is pressed, activate exited condition and break out of valid loop
-                if label in exit:
+                if label in exit_key:
                     exited = True
                     print('\n')
                     print('-'*53)
@@ -329,7 +354,7 @@ for tile in tiles:
 #----------------------------------back key-----------------------------------#                
                 
                 # if DEL (127) or Left Arrow (2) is pressed, attempt to go back one cell
-                elif res == 127 or res == 2:
+                elif label == 'b':
                     # reverse through labels to check if possible
                     for index, lab in enumerate(labels[::-1]):    
                         # if possible, reset to that cell
@@ -353,7 +378,7 @@ for tile in tiles:
 #------------------------key not in labels dictionary-------------------------#
 
                 # if label is not in labels dictionary, raise error
-                elif label not in [str(i) for i in labels_dict.keys()]:
+                elif label not in [str(i) for i in labels_dict.keys()] + ['-']:
                     print('unrecognized label')
                     print('cell: %2d of %2d --> class: ' % (mask_id, num_masks), end='')
                     cv2.setWindowTitle('Cell Annotator', 'ERROR: UNRECOGNIZED LABEL')    
@@ -364,14 +389,17 @@ for tile in tiles:
                 else:
                     # activate valid input
                     valid = True
-                    label = int(label)
+                    if label == '-':
+                        label = -1
+                    else:
+                        label = int(label)
                     print(labels_dict[label])
                     labels.append(label)
 
 #--------------------------response to valid label----------------------------#
 
             # if exit key is pressed in valid loop, break out of cell loop
-            if label in exit:
+            if label in exit_key:
                 break
             # if back is triggered, reset to false and revert to previous cell
             elif back:
@@ -383,7 +411,7 @@ for tile in tiles:
 #--------------check if number of labels match number of cells----------------#
         
         # if exit key is pressed in cell loop, break out of correct loop   
-        if label in exit:
+        if label in exit_key:
             break
     
         # raise error if there is not a label for every cell in tile and repeat tile annotation
@@ -399,19 +427,19 @@ for tile in tiles:
             # activate correct condition
             correct = True
             # save annotated info for tile once all cells have been labeled
-            np.savez(os.path.join(results_folder_path, tile[:-7]+'annotated.npz'), raw=raw, masks=masks, labels=labels)
+            np.savez(os.path.join(results_folder_path, tile[:-7]+'annotated.npz'), raw=raw, masks=masks, labels=labels, labels_dict = labels_dict)
             # move file to completed folder
             os.replace(tile, os.path.join(finished_folder_path, tile))
             print()
             print('FINISHED --> \''+tile+'\'')
-            print(' RESULTS --> \''+results_folder+'/'+tile+'\'')
+            print(' RESULTS --> \''+results_folder+'/'+tile[:-7]+'annotated.npz'+'\'')
             print('    TILE --> \''+finished_folder+'/'+tile+'\'')
             print()
 
 #---------------------------------(exit key)----------------------------------#
 
     # if exit key is pressed in correct loop, break out of tile loop   
-    if label in exit:
+    if label in exit_key:
         break
     
 ############################### CLOSE ANNOTATOR ###############################
