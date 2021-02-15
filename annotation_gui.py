@@ -18,15 +18,15 @@ import cv2
 
 #----------------------------------USER INPUT---------------------------------#
 
-# if working in terminal, run:     'python /path/to/annotation_gui.py /path/to/tiles'
-#   or cd to tiles folder and run: 'python /path/to/annotation_gui.py $(pwd)'
-#   or edit path_to_tiles and run: 'python /path/to/annotation_gui.py'
+# if working in terminal, run:     'python /path/to/annotation_gui.py /path/to/data'
+#   or cd to data folder and run: 'python /path/to/annotation_gui.py $(pwd)'
+#   or edit path_to_data and run: 'python /path/to/annotation_gui.py'
 
 # if working in Jupyter Notebook, run '%load annotation_gui.py' in new .ipynb file and change JN = True
 JN = False
 
-# path to tiles (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_tiles = '/Users/jimmytabet/Desktop/data1'
+# path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
+path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TEST/Cellpose_tiles'
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND 0-9 (EXCEPT 'EDGE') !!!!!!!!!!!#
@@ -66,25 +66,25 @@ show_half_size = 0 # < 400
 # get edge key for automatic edge assignment
 edge_key = [k for k,v in labels_dict.items() if v == 'edge'][0]
 
-# set path_to_tiles if run in terminal
+# set path_to_data if run in terminal
 if len(sys.argv) > 1 and not JN:
-    path_to_tiles = sys.argv[1]
+    path_to_data = sys.argv[1]
 else:
-    path_to_tiles = path_to_tiles
+    path_to_data = path_to_data
     
 # check that given path is actually a folder
-while not os.path.isdir(path_to_tiles):
-    path_to_tiles = input('ERROR: '+path_to_tiles+' not found, try again\npath to tiles: ')
-    path_to_tiles = os.path.abspath(path_to_tiles)
+while not os.path.isdir(path_to_data):
+    path_to_data = input('ERROR: '+path_to_data+' not found, try again\npath to data: ')
+    path_to_data = os.path.abspath(path_to_data)
 
-# change directory to tiles
-os.chdir(path_to_tiles)
+# change directory to data
+os.chdir(path_to_data)
 # create list of tiles to annotate (exclude 'finished' tiles)
-tiles = sorted(glob.glob(os.path.join(path_to_tiles,'**/*.npy'), recursive=True))
+tiles = sorted(glob.glob(os.path.join(path_to_data,'**/*.npy'), recursive=True))
 tiles = [file for file in tiles if not 'finished' in file]
 
-# get folder to annotation results
-results_folder = os.path.join(path_to_tiles, os.path.basename(path_to_tiles)+'_annotation_results')
+# folder for annotation results
+results_folder = os.path.join(path_to_data, 'annotation_results')
 
 # show annotator set up if there are files to annotate
 if tiles:
@@ -112,28 +112,25 @@ if tiles:
         show_half_size = 0
         print('show_half_size too small, reverting to showing entire tile')
     
-    
-    # create folders if they do not exsist
+    # create results folder if does not exsist
     if not os.path.isdir(results_folder):
         os.makedirs(results_folder)
-        print('created annotated results folder: ', results_folder)
+        print('created annotation results folder: ', results_folder)
     
     # print annotator set up
     print()
     print('ANNOTATOR SET UP:')
     print()
     
-    # tiles, results, finished folders
-    print('tiles folder (pwd):\n\t', os.getcwd())
+    # data and results folders
+    print('data folder (pwd):\n\t', os.getcwd())
     print()
-    print('results folder:\n\t', os.path.join(os.getcwd(), results_folder))
+    print('annotation results folder:\n\t', os.path.join(os.getcwd(), results_folder))
     print()
-    # print('finished folder:\n\t', os.path.join(os.getcwd(), finished_folder))
-    # print()
     
     # files to annotate
     print('files ('+str(len(tiles))+' total):')
-    short_name = [os.path.join(os.path.basename(os.path.dirname(file)), os.path.basename(file)) for file in tiles]
+    short_name = [os.path.relpath(tile) for tile in tiles]
     for i in short_name[:5]:
         print('\t',i)
     if len(tiles) > 5:
@@ -198,7 +195,7 @@ for tile in tiles:
 
     while not correct:
         
-        # init label and list for labels tile
+        # init cell label and list for cell labels in tile
         label = None
         labels=[]
         
@@ -432,27 +429,38 @@ for tile in tiles:
                 else:
                     pass
             
+            # save and move files
+            # get file name, position/data paths, and annotated data path
+            file_name = os.path.basename(tile)
+            position_path = os.path.dirname(tile)
+            position_folder = os.path.basename(position_path)            
+            data_folder = os.path.basename(os.path.dirname(position_path))
+            annotated_data_path = os.path.join(results_folder,data_folder)
             
-            # get file name
-            filename = os.path.basename(tile)
             # get finished and results paths
-            finished_path = os.path.join(os.path.dirname(tile)+'_finished', os.path.basename(tile))
-            results_path = os.path.join(results_folder, os.path.basename(os.path.dirname(tile))+'_results', os.path.basename(tile[:-7])+'annotated.npz')
-            # create finished and results folders if not already created
-            if not os.path.isdir(os.path.dirname(finished_path)):
-                os.makedirs(os.path.dirname(finished_path))
+            results_path = os.path.join(annotated_data_path, position_folder, file_name[:-7]+'annotated.npz')
+            finished_path = os.path.join(position_path+'_finished', os.path.basename(tile))
+           
+            # create results and finished folders if not already created
+            # new annotated data folder
+            if not os.path.isdir(annotated_data_path):
+                os.makedirs(annotated_data_path)
+            # new annotated position folder
             if not os.path.isdir(os.path.dirname(results_path)):
                 os.makedirs(os.path.dirname(results_path))
-            
+            # finished position folder
+            if not os.path.isdir(os.path.dirname(finished_path)):
+                os.makedirs(os.path.dirname(finished_path))
+
             # save annotated info for tile once all cells have been labeled
             np.savez(results_path, raw=raw, masks=masks, labels=labels, labels_dict = labels_dict)
             # move file to completed folder
             os.replace(tile, finished_path)
 
-            short_path = os.path.join(os.path.basename(os.path.dirname(tile)), os.path.basename(tile))
-            short_results = os.path.join(os.path.basename(os.path.dirname(results_path)), os.path.basename(results_path))
-            short_finished = os.path.join(os.path.basename(os.path.dirname(finished_path)), os.path.basename(finished_path))
-            
+            # print paths
+            short_path = os.path.relpath(tile)
+            short_results = os.path.relpath(results_path)     
+            short_finished = os.path.relpath(finished_path)            
             print()
             print('FINISHED --> \''+short_path+'\'')
             print(' RESULTS --> \''+short_results+'\'')
@@ -473,6 +481,6 @@ cv2.destroyAllWindows()
 # print exit message
 if not exited:
     print('-'*53)
-    print('NO FILES FOUND/ALL FILES FINISHED IN:\n'+path_to_tiles)
+    print('NO FILES FOUND/ALL FILES FINISHED IN:\n'+path_to_data)
 else:
     print('ANNOTATOR EXITED')
