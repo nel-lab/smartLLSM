@@ -11,10 +11,9 @@ import numpy as np
 from skimage.util import montage
 import matplotlib.pyplot as plt
 import cv2
-from sklearn.model_selection import train_test_split
-from sklearn.svm import SVC
-from sklearn.model_selection import GridSearchCV
 from sklearn import metrics
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.svm import SVC
 
 data = np.load('/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/annotated.npz', allow_pickle=True)
 X = data['X']
@@ -73,16 +72,22 @@ blurred = new_cells[blur]
 X = np.vstack([X,blurred])
 y = np.append(y, [0]*len(blur))
 
+#%% LOAD ALL ANNOTATED DATA
+dat = np.load('/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated.npz', allow_pickle=True)
+X = dat['X']
+y = dat['y']
+
 #%% SVM and GridSearch
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+X_train, X_test, y_train, y_test = train_test_split(X.reshape(X.shape[0], -1), y, test_size=0.3, random_state=0)
 tuned_parameters = {'kernel': ['rbf', 'linear', 'poly', 'sigmoid'], 'C': [0.1, 1, 10, 100, 1000], 'probability': [True]}
 
 clf = GridSearchCV(SVC(), tuned_parameters, scoring='f1')
 clf.fit(X_train, y_train)
 print(clf.best_params_)
 model = clf.best_estimator_
-print('accuracy:', metrics.accuracy_score(y_test, model.predict(X_test)))
-print('f1:', metrics.f1_score(y_test, model.predict(X_test)))
+print('         accuracy:', metrics.accuracy_score(y_test, model.predict(X_test)))
+print('balanced accuracy:', metrics.balanced_accuracy_score(y_test, model.predict(X_test)))
+print('               f1:', metrics.f1_score(y_test, model.predict(X_test)))
 
 #%% run through new_cells
 # model=SVC(probability=True).fit(X_train,y_train)
