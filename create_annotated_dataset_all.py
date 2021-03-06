@@ -13,14 +13,14 @@ import cv2
 from scipy import ndimage
 
 #%% old annotated data
-old = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/annotated_isolate.npz'
-dat = np.load(old, allow_pickle=True)
-X = dat['X']
-y = list(dat['y'])
-X = [cv2.resize(i, (191,191)) for i in X]
+# old = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/annotated_isolate.npz'
+# dat = np.load(old, allow_pickle=True)
+# X = dat['X']
+# y = list(dat['y'])
+# X = [cv2.resize(i, (191,191)) for i in X]
 
 #%% new annotated data
-path = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/annotation results'
+path = '/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
 files = sorted(glob.glob(path+'/**/*.npz', recursive=True))
 no_tiles = len(files)
 
@@ -28,6 +28,8 @@ no_tiles = len(files)
 bb_size = 191
 half_size = bb_size//2
 
+X = []
+y = []
 count = 0
 for file in files:
     dat = np.load(file, allow_pickle=True)
@@ -67,17 +69,24 @@ for file in files:
 
         X.append(raw_isolate[r1:r2,c1:c2])
         y.append(labels_dict[dat['labels'][idx]])
-    
+
+    if count == 0:
+        print(f'{count}\tof\t{no_tiles}')
+        
     count += 1
     if count%50 == 0:
         print(f'{count}\tof\t{no_tiles}')
         
+    if count == no_tiles:
+        print(f'{count}\tof\t{no_tiles}\nDONE')
+        
 #%%
 X = np.stack(X)
+y = np.array(y)
 print(X.shape)
-print(len(y))
+print(y.shape)
 
-# np.savez('all_annotated', X=X, y=y)
+np.savez('/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update.npz', X=X, y=y)
 
 #%%
 from collections import Counter
@@ -87,12 +96,12 @@ stages_dict = dict(sorted(stages_dict.items(), key = lambda item: item[1], rever
 
 no_cells = len(y)
 
-print('RESULTS FOR ALL ANNOTATED DATA:\n')
+print(f'RESULTS OF {no_tiles} TILES:\n')
 for k,v in stages_dict.items():
     if len(k) < 7:
         print(f'{k}: \t\t{100*v/no_cells:-3.0f}% ({v})')
     else:
         print(f'{k}: \t{100*v/no_cells:-3.0f}% ({v})')
         
-print('------------------------')
+print('-------------------------')
 print(f'             100% ({no_cells})')

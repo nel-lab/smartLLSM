@@ -15,9 +15,31 @@ from sklearn import metrics
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.svm import SVC
 
-dat = np.load('/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated.npz', allow_pickle=True)
+dat = np.load('/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update.npz', allow_pickle=True)
 X = dat['X']
 y = dat['y']
+
+#%% remove 'unknown' and 'interphase' labels
+remove = np.where((y=='unknown') | (y=='interphase'))
+X_clean = np.delete(X, remove, axis=0)
+y_clean = np.delete(y, remove, axis=0)
+
+#%% balance dataset with 100 examples of each class
+from collections import Counter
+import random
+
+keep = []
+for k,v in Counter(y).items():
+  ids = np.argwhere(y==k).ravel()
+  if v > 100:
+    keep.append(random.sample(list(ids),100))
+  else:
+    keep.append(ids)
+
+keep = np.array([i for j in keep for i in j])
+X = X[keep]
+y = y[keep]
+print(Counter(y))
 
 #%% optionally transform annotated data
 from skimage import transform
@@ -53,10 +75,79 @@ plt.imshow(montage(dat['X'][:49], padding_width = 10), cmap='gray')
 #     plt.pause(1)
 
 #%% show std data
-X_std = np.stack([x/np.max(x) for x in dat['X']])
-plt.imshow(montage(X_std[:49], padding_width=10), cmap='gray')
+X_std = np.stack([x/np.max(x) for x in X])
+X_std = X_std.astype(np.float32)
+# plt.imshow(montage(X_std[:49], padding_width=10), cmap='gray')
+
+#%% ADVANCED TRANSFORM
+import numpy as np
+import cv2
+from skimage.transform import rotate, AffineTransform, warp
+import random
+from skimage.util import random_noise
+
+def anticlockwise_rotation(image):
+    angle= random.randint(0,180)
+    return rotate(image, angle)
+
+def clockwise_rotation(image):
+    angle= random.randint(0,180)
+    return rotate(image, -angle)
+
+def h_flip(image):
+    return  np.fliplr(image)
+
+def v_flip(image):
+    return np.flipud(image)
+
+def add_noise(image):
+    return random_noise(image)
+
+def blur_image(image):
+    return cv2.GaussianBlur(image, (9,9),0)
+
+def warp_shift(image): 
+    transform = AffineTransform(translation=(np.random.randint(5),np.random.randint(5)))  #chose x,y values according to your convinience    
+    warp_image = warp(image, transform, mode="wrap")    
+    return warp_image
+
+transformations = {'rotate anticlockwise': anticlockwise_rotation,
+                   'rotate clockwise': clockwise_rotation,
+                   'horizontal flip': h_flip, 
+                   'vertical flip': v_flip,
+                   'warp shift': warp_shift,
+                   'adding noise': add_noise,
+                   'blurring image':blur_image
+                 }
+
+# only transform prophase cells
+images=X_std[np.argwhere(y=='prophase').ravel()]
+
+images_to_generate=5000  
+i=0
+
+new_cells = []
+while i<images_to_generate:    
+    original_image=random.choice(images)
+    transformed_image=original_image.copy()
+    
+    n = 0       #variable to iterate till number of transformation to apply
+    transformation_count = random.randint(1, len(transformations)) #choose random number of transformation to apply on the image
+    
+    while n <= transformation_count:
+        key = random.choice(list(transformations)) #randomly choosing method to call
+        transformed_image = transformations[key](transformed_image)
+        n = n + 1
+        
+    new_cells.append(transformed_image.astype(np.float32))
+    i += 1
+
+new_cells = np.array(new_cells)
+X_std = np.concatenate([X_std, new_cells])
+y = np.append(y, ['prophase' for i in new_cells])
 
 #%% train on std dataset (BEST SO FAR)
+X_std = X_std.astype(np.float32)
 X_train, X_test, y_train, y_test = train_test_split(X_std.reshape(X_std.shape[0], -1), y, test_size=0.3, random_state=0)
 # tuned_parameters = {'kernel': ['rbf', 'linear', 'poly', 'sigmoid'], 'C': [0.1, 1, 10, 100, 1000], 'probability': [True]}
 
@@ -64,12 +155,14 @@ X_train, X_test, y_train, y_test = train_test_split(X_std.reshape(X_std.shape[0]
 # clf.fit(X_train, y_train)
 # print(clf.best_params_)
 # model = clf.best_estimator_
-model = SVC(class_weight = 'balanced', verbose = 1)
+model = SVC(class_weight = 'balanced')
 model.fit(X_train, y_train)
 results = model.predict(X_test)
-print('         accuracy:', metrics.accuracy_score(y_test, results))
-print('balanced accuracy:', metrics.balanced_accuracy_score(y_test, results))
-print('               f1:', metrics.f1_score(y_test, results, average = 'weighted'))
+print('          accuracy:', metrics.accuracy_score(y_test, results))
+print(' balanced accuracy:', metrics.balanced_accuracy_score(y_test, results))
+print('                f1:', metrics.f1_score(y_test, results, average = 'weighted'))
+print('   prophase recall:', metrics.recall_score(y_test, results, labels=['prophase'], average = 'weighted'))
+print('prophase precision:', metrics.precision_score(y_test, results, labels=['prophase'], average = 'weighted'))
 
 #%% train on reg dataset w/weights
 X_train_reg, X_test_reg, y_train_reg, y_test_reg = train_test_split(dat['X'].reshape(dat['X'].shape[0], -1), y, test_size=0.3, random_state=0)
@@ -110,15 +203,16 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import pandas as pd
 classes = model.classes_
 
-print(pd.DataFrame(confusion_matrix(y_test, results), index = classes, columns = classes))
-
 disp = ConfusionMatrixDisplay(confusion_matrix(y_test, results), display_labels=classes)
 disp.plot()
+
+con_matrix = pd.DataFrame(confusion_matrix(y_test, results), index = [i+'_true' for i in classes], columns = [i+'_pred' for i in classes])
+print(con_matrix)
 
 #%% train on one hot w/prophase
 y = dat['y']=='prophase'
 X_train, X_test, y_train, y_test = train_test_split(X.reshape(X.shape[0], -1), y, test_size=0.3, random_state=0)
-tuned_parameters = {'C': [0.1, 1, 10], 'probability': [True], 'class_weight': ['balanced']}
+tuned_parameters = {'C': [0.1, 1, 10, 100], 'probability': [True], 'class_weight': ['balanced']}
 
 clf = GridSearchCV(SVC(), tuned_parameters, scoring='f1', verbose=1)
 clf.fit(X_train, y_train)
