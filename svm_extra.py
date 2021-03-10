@@ -206,7 +206,7 @@ classes = model.classes_
 disp = ConfusionMatrixDisplay(confusion_matrix(y_test, results), display_labels=classes)
 disp.plot()
 
-con_matrix = pd.DataFrame(confusion_matrix(y_test, results), index = [i+'_true' for i in classes], columns = [i+'_pred' for i in classes])
+con_matrix = pd.DataFrame(confusion_matrix(y_test, results), index = [str(i)+'_true' for i in classes], columns = [str(i)+'_pred' for i in classes])
 print(con_matrix)
 
 #%% train on one hot w/prophase

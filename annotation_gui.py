@@ -80,7 +80,7 @@ while not os.path.isdir(path_to_data):
 # change directory to data
 os.chdir(path_to_data)
 # create list of tiles to annotate (exclude 'finished' tiles)
-tiles = sorted(glob.glob(os.path.join(path_to_data,os.path.join('**','*.npy')), recursive=True))
+tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
 tiles = [file for file in tiles if not 'finished' in file]
 
 # folder for annotation results
