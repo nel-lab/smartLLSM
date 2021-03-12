@@ -63,6 +63,8 @@ target = 'prophase'
 z_spread = 2
 X = []
 y = []
+ID = []
+slice_ID = []
 
 # loop over each annotated file
 count = 0
@@ -139,9 +141,19 @@ for file in annotated_files:
                 SE_min = SE
                 best = i
         
-        # print best slice if entropy did not work
+        # if entropy did not work compare to original (and/or print best slice)
         if not SE_works:
-            print(best)
+            # print(best)
+            fig,ax = plt.subplots(1,2)
+            fig.suptitle(identifier)
+            ax[0].imshow(individual_cell[best], cmap='gray')
+            ax[0].set_title('my_entropy')
+            ax[0].set_xticks([])
+            ax[0].set_yticks([])
+            ax[1].imshow(raw[r1:r2,c1:c2], cmap='gray')
+            ax[1].set_title('original')
+            ax[1].set_xticks([])
+            ax[1].set_yticks([])
         
         # check best slice is in range for z_spread
         if best-z_spread < 0 or best+z_spread > len(stack):
@@ -150,24 +162,34 @@ for file in annotated_files:
             break
         
         # save best slices of cell
+        slice_num = -z_spread
         for i in range(best-z_spread,best+z_spread+1):        
             X.append(individual_cell[i])
             y.append(target)
+            ID.append(count)
+            slice_ID.append(slice_num)
+            slice_num += 1
 
-    count += 1
-    if count%10 == 0:
-        print(f'{count}\tof\t103')
+        count += 1
+        if count%10 == 0:
+            print(f'{count}\tof\t103')
 
 # explore results to confirm
 X = np.stack(X)
 y = np.array(y)
+ID = np.array(ID)
+slice_ID = np.array(slice_ID)
 print(X.shape)
-print(y.shape)
+print(y.shape, np.unique(y))
+print(ID.shape, np.unique(ID))
+print(slice_ID.shape, np.unique(slice_ID))
+plt.figure()
 plt.imshow(montage(X, padding_width = 10, grid_shape=(np.ceil(len(X)/35),35)), cmap='gray')
 plt.xticks([])
 plt.yticks([])
+plt.show()
 
 #%% SAVE CELLS (IF NO ERROR)
 path_to_datasets = r'C:\Users\LegantLab\NEL-LAB Dropbox\NEL\Datasets\smart_micro\datasets'
 if not error:
-    np.savez(os.path.join(path_to_datasets, target+'_cell_slices.npz'), X=X, y=y)
+    np.savez(os.path.join(path_to_datasets, target+'_cell_slices.npz'), X=X, y=y, ID=ID, slice_ID=slice_ID)
