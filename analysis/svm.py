@@ -120,8 +120,8 @@ print('prophase precision:', metrics.precision_score(y_test, results, labels=['p
 pro = np.intersect1d(np.where(y_test == 'prophase'), np.where(results == 'prophase'))
 plt.imshow(montage(X_std[pro], padding_width=10), cmap='gray')
 
-#%% CONFUSION MATRIX
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+#%% CONFUSION MATRIX/CLASSIFICATION REPORT
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
 import pandas as pd
 classes = model.classes_
 
@@ -130,6 +130,8 @@ disp.plot()
 
 con_matrix = pd.DataFrame(confusion_matrix(y_test, results), index = [str(i)+'_true' for i in classes], columns = [str(i)+'_pred' for i in classes])
 print(con_matrix)
+
+print(classification_report(y_test, results))
 
 #%% TRAIN ONE HOT
 y_one = y_train_aug=='prophase'
