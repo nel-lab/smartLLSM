@@ -11,7 +11,7 @@ import numpy as np
 from scipy import ndimage
 
 # pick tiles that have not been annotated
-path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TEST/Cellpose_tiles'
+path_to_data = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/data_1_cellpose'
 tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
 tiles = [file for file in tiles if not 'finished' in file]
 no_tiles = len(tiles)
@@ -23,7 +23,7 @@ half_size = bb_size//2
 # loop through each tile
 X = []
 count = 0
-for tile in tiles:
+for tile in tiles[:2000]:
     # load image and masks
     dat = np.load(tile, allow_pickle=True).item()
     raw = dat['img']
@@ -71,4 +71,4 @@ X = np.stack(X)
 print(X.shape)
 
 # save new_cells
-# np.savez('/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/new_cells.npz', X=X)
+# np.savez('/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/new_cells_2000_tiles.npz', X=X)
