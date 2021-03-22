@@ -19,8 +19,30 @@ path = '/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/
 dat = np.load(path, allow_pickle=True)
 X_org, y_org, ID, slice_ID = dat['X'], dat['y'], dat['ID'], dat['slice_ID']
 
+#%% only use slice +/- 1
+X_org = X_org[(abs(slice_ID)>1)==0]
+y_org = y_org[(abs(slice_ID)>1)==0]
+
+#%% balance dataset with 100 examples of each class
+from collections import Counter
+import random
+
+keep = []
+for k,v in Counter(y_org).items():
+  ids = np.argwhere(y_org==k).ravel()
+  if v > 100:
+    keep.append(random.sample(list(ids),100))
+  else:
+    keep.append(ids)
+
+keep = np.array([i for j in keep for i in j])
+X_org = X_org[keep]
+y_org = y_org[keep]
+print(Counter(y_org))
+
 #%% STD AND SPLIT DATA
-X_std = np.stack([x/np.max(x) for x in X_org])
+import cv2
+X_std = np.stack([cv2.resize(x, (50,50))/np.max(x) for x in X_org])
 X_std = X_std.astype(np.float32)
 # plt.imshow(montage(X_std[:49], padding_width=10), cmap='gray')
 
