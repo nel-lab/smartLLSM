@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 
-old = '/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update.npz'
-new = '/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/prophase_cell_slices.npz'
+old = '/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update_no_isolate_286.npz'
+new = '/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/prophase_cell_slices_no_isolate_286.npz'
 
 data_old = np.load(old)
 data_new = np.load(new)
@@ -75,5 +75,5 @@ print(f'             100% ({no_cells})')
 
 #%% SAVE
 if not error:
-    np.savez('/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update_prophase_slices.npz',
+    np.savez('/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update_prophase_slices_no_isolate_286.npz',
              X=X_all_unique, y=y_all_unique, ID=ID_all_unique, slice_ID=slice_ID_all_unique)

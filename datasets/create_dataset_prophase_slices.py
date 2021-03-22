@@ -54,7 +54,7 @@ annotated_folder = r'C:\Users\LegantLab\NEL-LAB Dropbox\NEL\Datasets\smart_micro
 annotated_files = sorted(glob.glob(os.path.join(annotated_folder, '**','*.npz'), recursive=True))
 
 # set bounding box size
-bb_size = 191
+bb_size = 286
 half_size = bb_size//2
 
 # init values
@@ -116,12 +116,12 @@ for file in annotated_files:
         
         # find bounding box indices
         r1 = max(0, center[0]-half_size)
-        r2 = min(raw.shape[0], center[0]+half_size+1)
+        r2 = min(raw.shape[0], center[0]+half_size)
         c1 = max(0, center[1]-half_size)
-        c2 = min(raw.shape[1], center[1]+half_size+1)
+        c2 = min(raw.shape[1], center[1]+half_size)
                 
-        rfix = half_size*2 - (r2-r1-1)
-        cfix = half_size*2 - (c2-c1-1)
+        rfix = half_size*2 - (r2-r1)
+        cfix = half_size*2 - (c2-c1)
         if r1 == 0: r2 += rfix
         if r2 == raw.shape[0]: r1 -= rfix
         if c1 == 0: c2 += cfix
@@ -129,11 +129,13 @@ for file in annotated_files:
         
         # copy stack to save isolated cell
         stack_isolate = stack.copy()
-        individual_cell = np.zeros([len(stack_isolate), bb_size, bb_size], dtype = raw.dtype)
+        all_cell = np.zeros([len(stack_isolate), half_size*2, half_size*2], dtype = raw.dtype)
+        individual_cell = np.zeros([len(stack_isolate), half_size*2, half_size*2], dtype = raw.dtype)
         SE_min = np.inf
         
         # loop over each slice to isolate cell and find best slice
         for i,z in enumerate(stack_isolate):
+            all_cell[i] = z[r1:r2,c1:c2]
             z[masks!=mask_id] = 0
             individual_cell[i] = z[r1:r2,c1:c2]
             SE = shannon_entropy(individual_cell[i])
@@ -146,7 +148,7 @@ for file in annotated_files:
             # print(best)
             fig,ax = plt.subplots(1,2)
             fig.suptitle(identifier)
-            ax[0].imshow(individual_cell[best], cmap='gray')
+            ax[0].imshow(all_cell[best], cmap='gray')
             ax[0].set_title('my_entropy')
             ax[0].set_xticks([])
             ax[0].set_yticks([])
@@ -164,7 +166,7 @@ for file in annotated_files:
         # save best slices of cell
         slice_num = -z_spread
         for i in range(best-z_spread,best+z_spread+1):        
-            X.append(individual_cell[i])
+            X.append(all_cell[i])
             y.append(target)
             ID.append(count)
             slice_ID.append(slice_num)
@@ -192,4 +194,4 @@ plt.show()
 #%% SAVE CELLS (IF NO ERROR)
 path_to_datasets = r'C:\Users\LegantLab\NEL-LAB Dropbox\NEL\Datasets\smart_micro\datasets'
 if not error:
-    np.savez(os.path.join(path_to_datasets, target+'_cell_slices.npz'), X=X, y=y, ID=ID, slice_ID=slice_ID)
+    np.savez(os.path.join(path_to_datasets, target+'_cell_slices_no_isolate_286.npz'), X=X, y=y, ID=ID, slice_ID=slice_ID)
