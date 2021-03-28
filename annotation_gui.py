@@ -18,7 +18,7 @@ import cv2
 
 #----------------------------------USER INPUT---------------------------------#
 
-# if working in terminal, run:     'python /path/to/annotation_gui.py /path/to/data'
+# if working in terminal, run:    'python /path/to/annotation_gui.py /path/to/data'
 #   or cd to data folder and run: 'python /path/to/annotation_gui.py $(pwd)'
 #   or edit path_to_data and run: 'python /path/to/annotation_gui.py'
 
@@ -29,15 +29,18 @@ JN = False
 path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TEST/Cellpose_tiles'
 
 # labels dictionary
-#!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND 0-9 (EXCEPT 'EDGE') !!!!!!!!!!!#
-labels_dict = {-1: 'edge', # automatically detected, key can be any (unique) int
-                0: 'unknown',
-                1: 'blurry',
-                2: 'interphase',
-                3: 'prophase',
+#!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
+labels_dict = {-1: 'edge', # automatically detected
+                0: 'blurry',
+                1: 'interphase',
+                2: 'prophase',
+                3: 'prometaphase',
                 4: 'metaphase',
                 5: 'anaphase',
-                6: 'telophase'}
+                6: 'telophase',
+                7: 'junk',
+                8: 'TBD',
+                9: 'other'}
 
 # show label dictionary key(s)
 show_label = ['l','d']
@@ -80,8 +83,9 @@ while not os.path.isdir(path_to_data):
 # change directory to data
 os.chdir(path_to_data)
 # create list of tiles to annotate (exclude 'finished' tiles)
+print('CREATING LIST OF FILES FOR ANNOTATION...')
 tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
-tiles = [file for file in tiles if not 'finished' in file]
+tiles = [file for file in tiles if not '_finished' in file]
 
 # folder for annotation results
 results_folder = os.path.join(path_to_data, 'annotation_results')
@@ -112,20 +116,21 @@ if tiles:
         show_half_size = 0
         print('show_half_size too small, reverting to showing entire tile')
     
-    # create results folder if does not exsist
-    if not os.path.isdir(results_folder):
-        os.makedirs(results_folder)
-        print('created annotation results folder: ', results_folder)
-    
     # print annotator set up
     print()
     print('ANNOTATOR SET UP:')
     print()
     
-    # data and results folders
+    # data folder
     print('data folder (pwd):\n\t', os.getcwd())
     print()
-    print('annotation results folder:\n\t', os.path.join(os.getcwd(), results_folder))
+    
+    # print/create results folder (if does not exist)
+    if not os.path.isdir(results_folder):
+        os.makedirs(results_folder)
+        print('created annotation results folder:\n\t', results_folder)
+    else:
+        print('annotation results folder:\n\t', results_folder)
     print()
     
     # files to annotate
@@ -157,9 +162,9 @@ if tiles:
     print('labels:')
     for k,v in labels_dict.items():
         if v=='edge':
-            print('\t%2d: %s (automatically assigned)' %(k,v))
+            print('\t%3s: %s (automatically assigned)' %(k,v))
         else:
-            print('\t%2d: %s' %(k,v))
+            print('\t%3s: %s' %(k,v))
     print()
     
 ############################### RUN ANNOTATOR #################################
@@ -225,7 +230,7 @@ for tile in tiles:
 #-------------automatically classify as edge if too close to edge-------------#
 
             if area_ratio < edge_area_thresh:
-                label = int(edge_key)
+                label = edge_key
                 # add 'auto' designation for when later trying to go back
                 labels.append(str(label) + 'auto')
                 print(labels_dict[label]+' (automatically assigned)')
@@ -291,7 +296,7 @@ for tile in tiles:
             if repeat:
                 window = 'ERROR: NUMBER OF LABELS DID NOT MATCH NUMBER OF CELLS, REPEATING '+os.path.basename(tile).upper()
                 repeat = False
-            elif label == int(edge_key):
+            elif label == edge_key:
                 window += ' (previous cell(s) on edge)' 
                 
             # show annotator window and image
@@ -316,6 +321,11 @@ for tile in tiles:
                 # wait for user entry and store
                 res = cv2.waitKey(0)
                 label = chr(res)
+                # convert label to integer if number
+                try:
+                    label = int(label)
+                except:
+                    label = label
 
 #----------------------------------exit key-----------------------------------#
 
@@ -331,13 +341,12 @@ for tile in tiles:
 
                 elif label in show_label:
                     print('\n')
-                    # print(labels_dict)
                     print('labels:')
                     for k,v in labels_dict.items():
                         if v=='edge':
-                            print('\t%2d: %s (automatically assigned)' %(k,v))
+                            print('\t%3s: %s (automatically assigned)' %(k,v))
                         else:
-                            print('\t%2d: %s' %(k,v))
+                            print('\t%3s: %s' %(k,v))
                     print()
                     print('manually assign edge key(s): ', man_edge)
                     print('back key(s): ', back_key)
@@ -352,7 +361,7 @@ for tile in tiles:
                     # reverse through labels to check if possible
                     for index, lab in enumerate(labels[::-1]):    
                         # if possible, reset to that cell
-                        if lab != str(int(edge_key)) + 'auto':
+                        if lab != str(edge_key) + 'auto':
                             # activate back condition and valid input
                             back = True
                             valid = True
@@ -372,7 +381,7 @@ for tile in tiles:
 #------------------------key not in labels dictionary-------------------------#
 
                 # if label is not in labels dictionary, raise error
-                elif label not in [str(i) for i in labels_dict.keys()] + man_edge:
+                elif label not in list(labels_dict.keys()) + man_edge:
                     print('unrecognized label')
                     print('cell: %2d of %2d --> class: ' % (mask_id, num_masks), end='')
                     cv2.setWindowTitle('Cell Annotator', 'ERROR: UNRECOGNIZED LABEL')    
@@ -384,10 +393,9 @@ for tile in tiles:
                     # activate valid input
                     valid = True
                     if label in man_edge:
-                        label = int(edge_key)
+                        label = edge_key
                         print(labels_dict[label]+' (manually assigned)')
                     else:
-                        label = int(label)
                         print(labels_dict[label])
                     labels.append(label)
 
@@ -424,10 +432,14 @@ for tile in tiles:
             
             # fix automatic edge label
             for i,lab in enumerate(labels):
-                if lab == str(int(edge_key)) + 'auto':
-                    labels[i] = int(edge_key)
+                if lab == str(edge_key) + 'auto':
+                    labels[i] = edge_key
                 else:
                     pass
+                
+            # convert labels to object np.array (for proper npz saving) if any labels are strings
+            if any([isinstance(i,str) for i in labels]):
+                labels = np.array(labels, dtype='object')
             
             # save and move files
             # get file name, position/data paths, and annotated data path
@@ -438,8 +450,8 @@ for tile in tiles:
             annotated_data_path = os.path.join(results_folder,data_folder)
             
             # get finished and results paths
-            results_path = os.path.join(annotated_data_path, position_folder, file_name[:-7]+'annotated.npz')
-            finished_path = os.path.join(position_path+'_finished', os.path.basename(tile))
+            results_path = os.path.join(annotated_data_path, position_folder+'_results', file_name[:-7]+'annotated.npz')
+            finished_path = os.path.join(position_path+'_finished', file_name)
            
             # create results and finished folders if not already created
             # new annotated data folder
