@@ -14,6 +14,7 @@ from scipy import ndimage
 #%% new annotated data
 path = '/Users/jimmytabet/NEL/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
 files = sorted(glob.glob(path+'/**/*.npz', recursive=True))
+files = [file for file in files if not 'og_backup' in file]
 no_tiles = len(files)
 
 # bounding box square 192 pixels long centered at 150
