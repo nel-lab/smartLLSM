@@ -181,7 +181,7 @@ prophase_col = 0    # for one hot
 # prophase_col = np.argwhere(classes=='prophase')[0][0]
 highest = prob[:,prophase_col].argsort()
 
-plt.imshow(montage(X_test[highest[:49]].reshape([-1,191,191]), padding_width=10), cmap='gray')
+plt.imshow(montage(X_test[highest[:49]].reshape([-1,X_org.shape[1],X_org.shape[2]]), padding_width=10), cmap='gray')
 
 #%%---------------------------------OTHER-------------------------------------
 #%% random forest
@@ -236,8 +236,8 @@ plt.imshow(montage(X_test[highest[:49]].reshape([-1,191,191]), padding_width=10)
 # model = clf.best_estimator_
 
 #%% show prophase/not prophase cells
-# prophase = X_test[results == 1].reshape(-1, 191, 191)
-# not_prophase = X_test[results == 0].reshape(-1, 191, 191)
+# prophase = X_test[results == 1].reshape(-1,X_org.shape[1],X_org.shape[2])
+# not_prophase = X_test[results == 0].reshape(-1,X_org.shape[1],X_org.shape[2])
 
 # p_mont = montage(prophase[:400], rescale_intensity=True)
 # notp_mont = montage(not_prophase[:400], rescale_intensity=True)
