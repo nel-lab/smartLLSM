@@ -15,6 +15,7 @@ import glob
 import numpy as np
 from scipy import ndimage
 import cv2
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message about not being optimized...
 
 #----------------------------------USER INPUT---------------------------------#
 
@@ -30,7 +31,8 @@ path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TE
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
-labels_dict = {-1: 'edge', # automatically detected
+labels_dict = {-2: 'filtered', # automatically detected
+               -1: 'edge',     # automatically detected
                 0: 'blurry',
                 1: 'interphase',
                 2: 'prophase',
@@ -57,6 +59,9 @@ exit_key = ['q']
 # threshold percentage of area needed to see edge cell/automatically assign edge cell
 edge_area_thresh = 0.7
 
+# threshold confidence to display "unique" cells/automatically filter cells
+filter_thresh = 0.7
+
 # half of size to show cell
 cell_half_size = 100
 
@@ -69,12 +74,15 @@ show_half_size = 0 # < 400
 # get edge key for automatic edge assignment
 edge_key = [k for k,v in labels_dict.items() if v == 'edge'][0]
 
+# get filtered key for automatic filtering
+filtered_key = [k for k,v in labels_dict.items() if v == 'filtered'][0]
+
 # set path_to_data if run in terminal
 if len(sys.argv) > 1 and not JN:
     path_to_data = sys.argv[1]
 else:
     path_to_data = path_to_data
-    
+
 # check that given path is actually a folder
 while not os.path.isdir(path_to_data):
     path_to_data = input('ERROR: '+path_to_data+' not found, try again\npath to data: ')
@@ -92,7 +100,26 @@ results_folder = os.path.join(path_to_data, 'annotation_results')
 
 # show annotator set up if there are files to annotate
 if tiles:
-
+    # set up neural network and filtering function
+    print('LOADING NEURAL NETWORK FILTER...')
+    import tensorflow as tf
+    path_to_nn_filter = glob.glob(os.path.join(path_to_data,'**','*.hdf5'), recursive=True)[0]
+#    test_col = 2
+    def nn_temp(a,b):return True
+    model = tf.keras.models.load_model(path_to_nn_filter, custom_objects={'f1_metric':nn_temp})
+    
+    def interesting(image, nn_model, thresh, test_col):
+        # normalize image
+        mean, std = np.mean(image), np.std(image)
+        image = (image-mean)/std
+        # add dimension to input to model
+        image = image.reshape(1,*nn_model.input_shape[1:])
+        preds = nn_model.predict(image).squeeze()
+        if preds[test_col] > thresh:
+            return True
+        else:
+            return False
+    
     # raise error if key conflict/duplicate keys found
     all_keys = [str(i) for i in [labels_dict.keys(), show_label, man_edge, back_key, exit_key] for i in i]
     key_names = ['labels_dict', 'show_label', 'man_edge', 'back_key', 'exit_key']
@@ -161,8 +188,8 @@ if tiles:
     # labels
     print('labels:')
     for k,v in labels_dict.items():
-        if v=='edge':
-            print('\t%3s: %s (automatically assigned)' %(k,v))
+        if v=='filtered' or v=='edge':
+            print('\t%3s: %-8s\t(automatically assigned)' %(k,v))
         else:
             print('\t%3s: %s' %(k,v))
     print()
@@ -218,6 +245,23 @@ for tile in tiles:
             center = ndimage.center_of_mass(masks==mask_id)
             center = np.array(center).astype(int)
             
+            # create image to test for filtering with nn
+            nn_half_size = model.input_shape[1]//2
+            r1_o = center[0]-nn_half_size
+            r2_o = center[0]+nn_half_size
+            c1_o = center[1]-nn_half_size
+            c2_o = center[1]+nn_half_size
+            # find bounding box indices to fit in tile
+            r1_nn = max(0, center[0]-nn_half_size)
+            r2_nn = min(raw.shape[0], center[0]+nn_half_size)
+            c1_nn = max(0, center[1]-nn_half_size)
+            c2_nn = min(raw.shape[1], center[1]+nn_half_size)
+            # pad new bounding box with constant value (mean, 0, etc.)
+            nn_test = np.zeros([nn_half_size*2, nn_half_size*2])
+            nn_test += raw[masks==0].mean().astype('int')
+            # store original bb in new bb
+            nn_test[r1_nn-r1_o:r2_nn-r1_o,c1_nn-c1_o:c2_nn-c1_o] = raw[r1_nn:r2_nn,c1_nn:c2_nn]
+            
             # find bounding box indices for showing isolated cell
             r1 = max(0, center[0]-cell_half_size)
             r2 = min(raw.shape[0], center[0]+cell_half_size)
@@ -237,7 +281,16 @@ for tile in tiles:
                 mask_id += 1
                 continue
             
-            # fix edge case if most of area is in frame
+#---------------automatically filter out non-interesting cells#---------------#
+            
+            elif not interesting(nn_test, model, filter_thresh, test_col):
+                label = filtered_key
+                labels.append(label)
+                print(labels_dict[label]+' (automatically assigned)')
+                mask_id += 1
+                continue
+            
+            # fix edge case if most of area is in frame and interesting
             else:
                 rfix = cell_half_size*2 - (r2-r1)
                 cfix = cell_half_size*2 - (c2-c1)
@@ -297,7 +350,9 @@ for tile in tiles:
                 window = 'ERROR: NUMBER OF LABELS DID NOT MATCH NUMBER OF CELLS, REPEATING '+os.path.basename(tile).upper()
                 repeat = False
             elif label == edge_key:
-                window += ' (previous cell(s) on edge)' 
+                window += ' (previous cell(s) on edge)'
+            elif label == filtered_key:
+                window += ' (previous cell(s) filtered by neural network)'
                 
             # show annotator window and image
             cv2.namedWindow('Cell Annotator', cv2.WINDOW_AUTOSIZE)
@@ -343,8 +398,8 @@ for tile in tiles:
                     print('\n')
                     print('labels:')
                     for k,v in labels_dict.items():
-                        if v=='edge':
-                            print('\t%3s: %s (automatically assigned)' %(k,v))
+                        if v=='filtered' or v=='edge':
+                            print('\t%3s: %-8s\t(automatically assigned)' %(k,v))
                         else:
                             print('\t%3s: %s' %(k,v))
                     print()
@@ -361,7 +416,7 @@ for tile in tiles:
                     # reverse through labels to check if possible
                     for index, lab in enumerate(labels[::-1]):    
                         # if possible, reset to that cell
-                        if lab != str(edge_key) + 'auto':
+                        if lab != str(edge_key) + 'auto' and lab != filtered_key:
                             # activate back condition and valid input
                             back = True
                             valid = True
