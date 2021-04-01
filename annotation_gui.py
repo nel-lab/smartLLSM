@@ -26,6 +26,12 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message abou
 # if working in Jupyter Notebook, run '%load annotation_gui.py' in new .ipynb file and change JN = True
 JN = False
 
+# boolean to use automatic neural network filter
+nn_filter = True
+
+# threshold confidence to display "unique" cells/automatically filter cells
+filter_thresh = 0.7
+
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
 path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TEST/Cellpose_tiles'
 
@@ -58,9 +64,6 @@ exit_key = ['q']
 
 # threshold percentage of area needed to see edge cell/automatically assign edge cell
 edge_area_thresh = 0.7
-
-# threshold confidence to display "unique" cells/automatically filter cells
-filter_thresh = 0.7
 
 # half of size to show cell
 cell_half_size = 100
@@ -98,27 +101,35 @@ tiles = [file for file in tiles if not '_finished' in file]
 # folder for annotation results
 results_folder = os.path.join(path_to_data, 'annotation_results')
 
-# show annotator set up if there are files to annotate
+# set up annotator if there are files to annotate
 if tiles:
-    # set up neural network and filtering function
-    print('LOADING NEURAL NETWORK FILTER...')
-    import tensorflow as tf
-    path_to_nn_filter = glob.glob(os.path.join(path_to_data,'**','*.hdf5'), recursive=True)[0]
-#    test_col = 2
-    def nn_temp(a,b):return True
-    model = tf.keras.models.load_model(path_to_nn_filter, custom_objects={'f1_metric':nn_temp})
-    
-    def interesting(image, nn_model, thresh, test_col):
-        # normalize image
-        mean, std = np.mean(image), np.std(image)
-        image = (image-mean)/std
-        # add dimension to input to model
-        image = image.reshape(1,*nn_model.input_shape[1:])
-        preds = nn_model.predict(image).squeeze()
-        if preds[test_col] > thresh:
-            return True
-        else:
-            return False
+    # set up neural network and filtering function if used
+    if nn_filter:
+        print('LOADING NEURAL NETWORK FILTER...')
+        import tensorflow as tf
+        path_to_nn_filter = glob.glob(os.path.join(path_to_data,'**','*.hdf5'), recursive=True)[0]
+        def nn_temp(a,b):return True
+        model = tf.keras.models.load_model(path_to_nn_filter, custom_objects={'f1_metric':nn_temp})
+        # set filter class/column
+        output_classes = np.array(model.name)
+        filter_class = 'unique'
+        while not filter_class in output_classes:
+            filter_class = input('Invalid filter class, pick from the following: '\
+                                 +str(output_classes)+'\n\tfilter class: ')
+        
+        filter_col = int(np.where(filter_class == output_classes)[0])
+        
+        def interesting(image, nn_model, thresh, thresh_col = filter_col):
+            # normalize image
+            mean, std = np.mean(image), np.std(image)
+            image = (image-mean)/std
+            # add dimension to input to model
+            image = image.reshape(1,*nn_model.input_shape[1:])
+            preds = nn_model.predict(image).squeeze()
+            if preds[thresh_col] > thresh:
+                return True
+            else:
+                return False
     
     # raise error if key conflict/duplicate keys found
     all_keys = [str(i) for i in [labels_dict.keys(), show_label, man_edge, back_key, exit_key] for i in i]
@@ -198,6 +209,7 @@ if tiles:
 
 # close all windows
 cv2.destroyAllWindows()
+cv2.waitKey(1)
 
 ################## LOOP THROUGH EVERY 800X800 TILE IN FOLDER ##################
 
@@ -246,21 +258,22 @@ for tile in tiles:
             center = np.array(center).astype(int)
             
             # create image to test for filtering with nn
-            nn_half_size = model.input_shape[1]//2
-            r1_o = center[0]-nn_half_size
-            r2_o = center[0]+nn_half_size
-            c1_o = center[1]-nn_half_size
-            c2_o = center[1]+nn_half_size
-            # find bounding box indices to fit in tile
-            r1_nn = max(0, center[0]-nn_half_size)
-            r2_nn = min(raw.shape[0], center[0]+nn_half_size)
-            c1_nn = max(0, center[1]-nn_half_size)
-            c2_nn = min(raw.shape[1], center[1]+nn_half_size)
-            # pad new bounding box with constant value (mean, 0, etc.)
-            nn_test = np.zeros([nn_half_size*2, nn_half_size*2])
-            nn_test += raw[masks==0].mean().astype('int')
-            # store original bb in new bb
-            nn_test[r1_nn-r1_o:r2_nn-r1_o,c1_nn-c1_o:c2_nn-c1_o] = raw[r1_nn:r2_nn,c1_nn:c2_nn]
+            if nn_filter:
+                nn_half_size = model.input_shape[1]//2
+                r1_o = center[0]-nn_half_size
+                r2_o = center[0]+nn_half_size
+                c1_o = center[1]-nn_half_size
+                c2_o = center[1]+nn_half_size
+                # find bounding box indices to fit in tile
+                r1_nn = max(0, center[0]-nn_half_size)
+                r2_nn = min(raw.shape[0], center[0]+nn_half_size)
+                c1_nn = max(0, center[1]-nn_half_size)
+                c2_nn = min(raw.shape[1], center[1]+nn_half_size)
+                # pad new bounding box with constant value (mean, 0, etc.)
+                nn_test = np.zeros([nn_half_size*2, nn_half_size*2])
+                nn_test += raw[masks==0].mean().astype('int')
+                # store original bb in new bb
+                nn_test[r1_nn-r1_o:r2_nn-r1_o,c1_nn-c1_o:c2_nn-c1_o] = raw[r1_nn:r2_nn,c1_nn:c2_nn]
             
             # find bounding box indices for showing isolated cell
             r1 = max(0, center[0]-cell_half_size)
@@ -283,7 +296,7 @@ for tile in tiles:
             
 #---------------automatically filter out non-interesting cells#---------------#
             
-            elif not interesting(nn_test, model, filter_thresh, test_col):
+            elif nn_filter and not interesting(nn_test, model, filter_thresh):
                 label = filtered_key
                 labels.append(label)
                 print(labels_dict[label]+' (automatically assigned)')
@@ -544,6 +557,7 @@ for tile in tiles:
     
 # close all windows
 cv2.destroyAllWindows()
+cv2.waitKey(1)
 
 # print exit message
 if not exited:
