@@ -201,6 +201,7 @@ if tiles:
 
 # close all windows
 cv2.destroyAllWindows()
+cv2.waitKey(1)
 
 ################## LOOP THROUGH EVERY 800X800 TILE IN FOLDER ##################
 
@@ -556,6 +557,7 @@ for tile in tiles:
     
 # close all windows
 cv2.destroyAllWindows()
+cv2.waitKey(1)
 
 # print exit message
 if not exited:

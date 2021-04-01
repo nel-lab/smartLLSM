@@ -7,13 +7,13 @@ Created on Wed Feb 17 15:56:52 2021
 """
 
 #%% imports
-import glob
+import os,glob
 import numpy as np
 from scipy import ndimage
 
 #%% new annotated data
 path = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
-files = sorted(glob.glob(path+'/**/*.npz', recursive=True))
+files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
 files = [file for file in files if not 'og_backup' in file]
 no_tiles = len(files)
 
