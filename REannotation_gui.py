@@ -25,6 +25,9 @@ import cv2
 # if working in Jupyter Notebook, run '%load annotation_gui.py' in new .ipynb file and change JN = True
 JN = False
 
+# boolean for RE_RE_annotating
+RE_RE_annotate = False
+
 # list of IDs to redo
 redo = ['prophase','unknown']
 
@@ -89,8 +92,12 @@ os.chdir(path_to_data)
 # create potential list of annotated tiles
 print('CREATING LIST OF FILES FOR REANNOTATION...')
 pot_tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npz'), recursive=True))
-pot_tiles = [file for file in pot_tiles if not '_updated' in file]
 pot_tiles = [file for file in pot_tiles if not 'og_backup' in file]
+# only include '_updated' files if RE_RE_annotating
+if RE_RE_annotate:
+    pot_tiles = [file for file in pot_tiles if '_updated' in file]
+else:
+    pot_tiles = [file for file in pot_tiles if not '_updated' in file]
 
 # create list of tiles for reannotation
 tiles = []
@@ -156,12 +163,13 @@ if tiles:
     print()
     
     # print/create backup folder (if does not exist)
-    if not os.path.isdir(backup_folder):
-        os.makedirs(backup_folder)
-        print('created og_backup folder:\n\t', backup_folder)
-    else:
-        print('og_backup folder:\n\t', backup_folder)
-    print()
+    if not RE_RE_annotate:
+        if not os.path.isdir(backup_folder):
+            os.makedirs(backup_folder)
+            print('created og_backup folder:\n\t', backup_folder)
+        else:
+            print('og_backup folder:\n\t', backup_folder)
+        print()
     
     # files to annotate
     print('files ('+str(len(tiles))+' total):')
@@ -231,6 +239,8 @@ for tile in tiles:
     identifier = [i.split('_') for i in tile.split(os.sep)[-3:]]
     # edit identifier to match Cellpose output
     identifier[-2][-1] = 'finished'
+    if RE_RE_annotate:
+        identifier[-1].pop()
     identifier[-1][-1] = 'seg.npy'
     identifier = ['_'.join(i) for i in identifier]
     identifier = os.path.join(*identifier)
@@ -394,7 +404,7 @@ for tile in tiles:
                 # convert label to integer if number
                 try:
                     label = int(label)
-                except:
+                except ValueError:
                     label = label
 
 #----------------------------------exit key-----------------------------------#
@@ -533,18 +543,25 @@ for tile in tiles:
             if not os.path.isdir(os.path.dirname(backup_path)):
                 os.makedirs(os.path.dirname(backup_path))
 
-            # move original file to backup folder
-            os.replace(tile, backup_path)
-            # save updated annotated info for tile once all cells have been labeled
-            updated_name = tile[:-4]+'_updated.npz'
-            np.savez(updated_name, raw=raw, masks=masks, labels=labels, labels_dict = labels_dict_tile)
+            # move original file to backup folder if not RE_RE_annotating
+            if not RE_RE_annotate:
+                os.replace(tile, backup_path)
+                # save updated annotated info for tile once all cells have been labeled
+                updated_name = tile[:-4]+'_updated.npz'
+                np.savez(updated_name, raw=raw, masks=masks, labels=labels, labels_dict = labels_dict_tile)
+            else:
+                np.savez(tile, raw=raw, masks=masks, labels=labels, labels_dict = labels_dict_tile)
+
 
             # print paths
             short_path = os.path.relpath(updated_name)
-            short_backup = os.path.relpath(backup_path)            
+            short_backup = os.path.relpath(backup_path)
             print()
-            print('  UPDATED --> \''+short_path+'\'')
-            print('OG_BACKUP --> \''+short_backup+'\'')
+            if not RE_RE_annotate:
+                print('  UPDATED --> \''+short_path+'\'')
+                print('OG_BACKUP --> \''+short_backup+'\'')
+            else:
+                print('  UPDATED --> \''+os.path.relpath(tile)+'\'')
             print()
 
 #---------------------------------(exit key)----------------------------------#
