@@ -111,7 +111,7 @@ if tiles:
         def nn_temp(a,b):return True
         model = tf.keras.models.load_model(path_to_nn_filter, custom_objects={'f1_metric':nn_temp})
         # set filter class/column
-        output_classes = np.array(model.name)
+        output_classes = np.array(model.name.split('__temp__'))
         filter_class = 'unique'
         while not filter_class in output_classes:
             filter_class = input('Invalid filter class, pick from the following: '\
@@ -294,7 +294,7 @@ for tile in tiles:
                 mask_id += 1
                 continue
             
-#---------------automatically filter out non-interesting cells#---------------#
+#---------------automatically filter out non-interesting cells----------------#
             
             elif nn_filter and not interesting(nn_test, model, filter_thresh):
                 label = filtered_key
@@ -392,7 +392,7 @@ for tile in tiles:
                 # convert label to integer if number
                 try:
                     label = int(label)
-                except:
+                except ValueError:
                     label = label
 
 #----------------------------------exit key-----------------------------------#
