@@ -29,7 +29,7 @@ JN = False
 # boolean to use automatic neural network filter
 nn_filter = True
 
-# threshold confidence to display "unique" cells/automatically filter cells
+# threshold confidence to classify "unique" cells/automatically filter tiles
 filter_thresh = 0.7
 
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
@@ -37,8 +37,7 @@ path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TE
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
-labels_dict = {-2: 'filtered', # automatically detected
-               -1: 'edge',     # automatically detected
+labels_dict = {-1: 'edge',     # automatically detected
                 0: 'blurry',
                 1: 'interphase',
                 2: 'prophase',
@@ -77,9 +76,6 @@ show_half_size = 0 # < 400
 # get edge key for automatic edge assignment
 edge_key = [k for k,v in labels_dict.items() if v == 'edge'][0]
 
-# get filtered key for automatic filtering
-filtered_key = [k for k,v in labels_dict.items() if v == 'filtered'][0]
-
 # set path_to_data if run in terminal
 if len(sys.argv) > 1 and not JN:
     path_to_data = sys.argv[1]
@@ -107,7 +103,10 @@ if tiles:
     if nn_filter:
         print('LOADING NEURAL NETWORK FILTER...')
         import tensorflow as tf
-        path_to_nn_filter = glob.glob(os.path.join(path_to_data,'**','*.hdf5'), recursive=True)[0]
+        try:
+            path_to_nn_filter = glob.glob(os.path.join(path_to_data,'**','*.hdf5'), recursive=True)[0]
+        except IndexError:
+            raise IndexError('No neural network model file (*.hdf5) found in folder!') from None
         def nn_temp(a,b):return True
         model = tf.keras.models.load_model(path_to_nn_filter, custom_objects={'f1_metric':nn_temp})
         # set filter class/column
@@ -119,17 +118,46 @@ if tiles:
         
         filter_col = int(np.where(filter_class == output_classes)[0])
         
-        def interesting(image, nn_model, thresh, thresh_col = filter_col):
-            # normalize image
-            mean, std = np.mean(image), np.std(image)
-            image = (image-mean)/std
-            # add dimension to input to model
-            image = image.reshape(1,*nn_model.input_shape[1:])
-            preds = nn_model.predict(image).squeeze()
-            if preds[thresh_col] > thresh:
-                return True
-            else:
-                return False
+        # filtering function to determine if tile contains interesting cell
+        def interesting(nn_model, raw_tile, masks_tile, thresh, thresh_col):
+        
+            # find number of identified cells
+            num_masks = np.max(masks_tile)
+            
+            # loop through each cell and check if interesting
+            for mask_id in range(1,num_masks+1):
+            
+                # find center of mass (as integer for indexing)
+                center = ndimage.center_of_mass(masks_tile==mask_id)
+                center = np.array(center).astype(int)
+                
+                # create image to test for filtering with nn
+                nn_half_size = nn_model.input_shape[1]//2
+                r1_o = center[0]-nn_half_size
+                c1_o = center[1]-nn_half_size
+                # find bounding box indices to fit in tile
+                r1_nn = max(0, center[0]-nn_half_size)
+                r2_nn = min(raw_tile.shape[0], center[0]+nn_half_size)
+                c1_nn = max(0, center[1]-nn_half_size)
+                c2_nn = min(raw_tile.shape[1], center[1]+nn_half_size)
+                # pad new bounding box with constant value (mean, 0, etc.)
+                nn_test = np.zeros([nn_half_size*2, nn_half_size*2])
+                nn_test += raw_tile[masks_tile==0].mean().astype('int')
+                # store original bb in new bb
+                nn_test[r1_nn-r1_o:r2_nn-r1_o,c1_nn-c1_o:c2_nn-c1_o] = raw_tile[r1_nn:r2_nn,c1_nn:c2_nn]
+        
+                # normalize image
+                mean, std = np.mean(nn_test), np.std(nn_test)
+                nn_test = (nn_test-mean)/std
+                # add dimension to input to model
+                nn_test = nn_test.reshape(1,*nn_model.input_shape[1:])
+                preds = nn_model.predict(nn_test).squeeze()
+                
+                # return True if interesting
+                if preds[thresh_col] > thresh:
+                    return True
+                else:
+                    continue
     
     # raise error if key conflict/duplicate keys found
     all_keys = [str(i) for i in [labels_dict.keys(), show_label, man_edge, back_key, exit_key] for i in i]
@@ -199,7 +227,7 @@ if tiles:
     # labels
     print('labels:')
     for k,v in labels_dict.items():
-        if v=='filtered' or v=='edge':
+        if v=='edge':
             print('\t%3s: %-8s\t(automatically assigned)' %(k,v))
         else:
             print('\t%3s: %s' %(k,v))
@@ -218,16 +246,21 @@ exited = False
 
 for tile in tiles:
     
-    # print current tile
-    print('-'*53)
-    print('\''+os.path.basename(tile).upper()+'\'')
-
     # load Cellpose data (raw image, masks, and outlines)
     data = np.load(tile, allow_pickle=True).item()
     raw = data['img']
     masks = data['masks']
     outlines = data['outlines']
-    
+
+    # if using filter, check for interesting cells in tile and skip if none found
+    if nn_filter and not interesting(model, raw, masks, filter_thresh, filter_col):
+        print(os.path.relpath(tile)+' - FILTERED')
+        continue
+
+    # print current tile
+    print('-'*53)
+    print('\''+os.path.relpath(tile).upper()+'\'')
+
     # find number of identified cells
     num_masks = np.max(masks)
 
@@ -257,24 +290,6 @@ for tile in tiles:
             center = ndimage.center_of_mass(masks==mask_id)
             center = np.array(center).astype(int)
             
-            # create image to test for filtering with nn
-            if nn_filter:
-                nn_half_size = model.input_shape[1]//2
-                r1_o = center[0]-nn_half_size
-                r2_o = center[0]+nn_half_size
-                c1_o = center[1]-nn_half_size
-                c2_o = center[1]+nn_half_size
-                # find bounding box indices to fit in tile
-                r1_nn = max(0, center[0]-nn_half_size)
-                r2_nn = min(raw.shape[0], center[0]+nn_half_size)
-                c1_nn = max(0, center[1]-nn_half_size)
-                c2_nn = min(raw.shape[1], center[1]+nn_half_size)
-                # pad new bounding box with constant value (mean, 0, etc.)
-                nn_test = np.zeros([nn_half_size*2, nn_half_size*2])
-                nn_test += raw[masks==0].mean().astype('int')
-                # store original bb in new bb
-                nn_test[r1_nn-r1_o:r2_nn-r1_o,c1_nn-c1_o:c2_nn-c1_o] = raw[r1_nn:r2_nn,c1_nn:c2_nn]
-            
             # find bounding box indices for showing isolated cell
             r1 = max(0, center[0]-cell_half_size)
             r2 = min(raw.shape[0], center[0]+cell_half_size)
@@ -294,16 +309,7 @@ for tile in tiles:
                 mask_id += 1
                 continue
             
-#---------------automatically filter out non-interesting cells----------------#
-            
-            elif nn_filter and not interesting(nn_test, model, filter_thresh):
-                label = filtered_key
-                labels.append(label)
-                print(labels_dict[label]+' (automatically assigned)')
-                mask_id += 1
-                continue
-            
-            # fix edge case if most of area is in frame and interesting
+            # fix edge case if most of area is in frame
             else:
                 rfix = cell_half_size*2 - (r2-r1)
                 cfix = cell_half_size*2 - (c2-c1)
@@ -358,14 +364,12 @@ for tile in tiles:
 #---------------------------set up annotator window---------------------------#
 
             # show cell number in window with extra info as necessary
-            window = os.path.basename(tile).upper()+': CELL '+str(mask_id)+' OF '+str(num_masks)
+            window = os.path.relpath(tile).upper()+': CELL '+str(mask_id)+' OF '+str(num_masks)
             if repeat:
-                window = 'ERROR: NUMBER OF LABELS DID NOT MATCH NUMBER OF CELLS, REPEATING '+os.path.basename(tile).upper()
+                window = 'ERROR: NUMBER OF LABELS DID NOT MATCH NUMBER OF CELLS, REPEATING '+os.path.relpath(tile).upper()
                 repeat = False
             elif label == edge_key:
                 window += ' (previous cell(s) on edge)'
-            elif label == filtered_key:
-                window += ' (previous cell(s) filtered by neural network)'
                 
             # show annotator window and image
             cv2.namedWindow('Cell Annotator', cv2.WINDOW_AUTOSIZE)
@@ -411,7 +415,7 @@ for tile in tiles:
                     print('\n')
                     print('labels:')
                     for k,v in labels_dict.items():
-                        if v=='filtered' or v=='edge':
+                        if v=='edge':
                             print('\t%3s: %-8s\t(automatically assigned)' %(k,v))
                         else:
                             print('\t%3s: %s' %(k,v))
@@ -429,7 +433,7 @@ for tile in tiles:
                     # reverse through labels to check if possible
                     for index, lab in enumerate(labels[::-1]):    
                         # if possible, reset to that cell
-                        if lab != str(edge_key) + 'auto' and lab != filtered_key:
+                        if lab != str(edge_key) + 'auto':
                             # activate back condition and valid input
                             back = True
                             valid = True
@@ -490,7 +494,7 @@ for tile in tiles:
             # activate repeat condition
             repeat = True
             print()
-            print('ERROR: number of labels does not match number of cells, repeating \''+os.path.basename(tile)+'\' ...')
+            print('ERROR: number of labels does not match number of cells, repeating \''+os.path.relpath(tile)+'\' ...')
             print()
         
         # fix and save labels and move files if all is good
@@ -562,6 +566,6 @@ cv2.waitKey(1)
 # print exit message
 if not exited:
     print('-'*53)
-    print('NO FILES FOUND/ALL FILES FINISHED IN:\n'+path_to_data)
+    print('NO FILES FOUND/ALL FILES FINISHED OR FILTERED IN:\n'+path_to_data)
 else:
     print('ANNOTATOR EXITED')
