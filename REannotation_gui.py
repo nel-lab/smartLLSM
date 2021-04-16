@@ -247,7 +247,7 @@ for tile in tiles:
     potential_ref = [x for x in reference if identifier in x]
     if len(potential_ref) != 1:
         raise ValueError('No corresponding Cellpose file found for \''+\
-                         os.path.join(os.path.basename(os.path.dirname(tile)), os.path.basename(tile))+'\'')
+                         os.path.relpath(tile, start = 'annotation_results')+'\'')
         break
     else:
         ref_path = potential_ref[0]
@@ -260,7 +260,7 @@ for tile in tiles:
     
     # print current tile
     print('-'*53)
-    print('\''+os.path.join(os.path.basename(os.path.dirname(tile)), os.path.basename(tile)).upper()+'\'')
+    print('\''+os.path.relpath(tile, start = 'annotation_results').upper()+'\'')
 
     # get list of mask_ids to redo
     redo_mask_ids = [i+1 for i,lab in enumerate(labels_stage) if lab in redo]
@@ -369,12 +369,12 @@ for tile in tiles:
 #---------------------------set up annotator window---------------------------#
 
             # show cell number in window with extra info as necessary
-            window = os.path.join(os.path.basename(os.path.dirname(tile)), os.path.basename(tile)).upper()+\
+            window = os.path.relpath(tile, start = 'annotation_results').upper()+\
                      ': CELL '+str(mask_id_idx+1)+' OF '+str(num_masks)+' - ORIGINAL LABEL: '+\
                      labels_stage[mask_id-1].upper()
             if repeat:
                 window = 'ERROR: NUMBER OF LABELS DID NOT MATCH NUMBER OF CELLS, REPEATING '+\
-                         os.path.join(os.path.basename(os.path.dirname(tile)), os.path.basename(tile)).upper()
+                         os.path.relpath(tile, start = 'annotation_results').upper()
                 repeat = False
             elif label == edge_key:
                 window += ' (previous cell(s) on edge)' 
@@ -503,7 +503,7 @@ for tile in tiles:
             repeat = True
             print()
             print('ERROR: number of labels does not match number of cells, repeating \''+\
-                  os.path.join(os.path.basename(os.path.dirname(tile)), os.path.basename(tile))+'\' ...')
+                  os.path.relpath(tile, start = 'annotation_results')+'\' ...')
             print()
         
         # fix and save labels and move files if all is good
