@@ -67,7 +67,7 @@ for file in files:
         # X.append(raw_isolate[r1:r2,c1:c2])
 
         # pad new bounding box with constant value (mean, 0, etc.)
-        final = np.zeros([half_size*2, half_size*2])
+        final = np.zeros([half_size*2, half_size*2], dtype=raw.dtype)
         final += raw[masks==0].mean().astype('int')
     
         # store original bb in new bb
@@ -92,11 +92,11 @@ y = np.array(y)
 print(X.shape)
 print(y.shape)
 
-np.savez('/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update_no_isolate_286.npz', X=X, y=y)
+#np.savez('/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_annotated_update_no_isolate_286_5_6.npz', X=X, y=y)
 
 #%%
 from collections import Counter
-
+ 
 stages_dict = dict(Counter(y))
 stages_dict = dict(sorted(stages_dict.items(), key = lambda item: item[1], reverse = True))
 

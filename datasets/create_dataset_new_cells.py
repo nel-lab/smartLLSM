@@ -11,7 +11,7 @@ import numpy as np
 from scipy import ndimage
 
 # pick tiles that have not been annotated
-path_to_data = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/data_1_cellpose'
+path_to_data = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/data_3_cellpose'
 tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
 tiles = [file for file in tiles if not 'finished' in file]
 no_tiles = len(tiles)
@@ -23,7 +23,7 @@ half_size = bb_size//2
 # loop through each tile
 X = []
 count = 0
-for tile in tiles[:2000]:
+for tile in tiles[-2000:]:
     # load image and masks
     dat = np.load(tile, allow_pickle=True).item()
     raw = dat['img']
@@ -63,7 +63,7 @@ for tile in tiles[:2000]:
         # X.append(raw_isolate[r1:r2,c1:c2])
 
         # pad new bounding box with constant value (mean, 0, etc.)
-        final = np.zeros([half_size*2, half_size*2])
+        final = np.zeros([half_size*2, half_size*2], dtype=raw.dtype)
         final += raw[masks==0].mean().astype('int')
     
         # store original bb in new bb
@@ -85,7 +85,7 @@ for tile in tiles[:2000]:
 # print end results
 X = np.stack(X)
 print(X.shape)
-# print('unique: ', np.unique(X, axis=0).shape)
+print('unique: ', np.unique(X, axis=0).shape)
 
 # save new_cells
-# np.savez('/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/new_cells_no_isolate_286_2000_tiles.npz', X=X)
+np.savez('/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/new_cells_no_isolate_286_2000_tiles_4_24.npz', X=X)
