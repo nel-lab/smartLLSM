@@ -9,12 +9,9 @@ Created on Tue Feb  9 18:56:25 2021
 ############################## SET UP ANNOTATOR ###############################
 
 # imports
-import sys
-import os
-import glob
+import sys, os, glob, cv2, re
 import numpy as np
 from scipy import ndimage
-import cv2
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message about not being optimized...
 
 #----------------------------------USER INPUT---------------------------------#
@@ -23,17 +20,24 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message abou
 #   or cd to data folder and run: 'python /path/to/annotation_gui.py $(pwd)'
 #   or edit path_to_data and run: 'python /path/to/annotation_gui.py'
 
-# if working in Jupyter Notebook, run '%load annotation_gui.py' in new .ipynb file and change JN = True
+# boolean to use Jupyter Notebook
+# if working in JN, run '%load annotation_gui.py' in new .ipynb file and change JN = True
 JN = False
 
-# boolean to use automatic neural network filter
-nn_filter = True
+# boolean to use pre-filtered file list
+prefiltered = True
+# path to pre-filtered file list
+path_to_prefiltered_files = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/data_1_preprocessed.npy'
 
+# boolean to use automatic neural network filter
+nn_filter = False
+# path to neural network filter (should be *.hdf5)
+path_to_nn_filter = ''
 # threshold confidence to classify "unique" cells/automatically filter tiles
 filter_thresh = 0.7
 
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TEST/Cellpose_tiles'
+path_to_data = '/home/nel-lab/Desktop/Jimmy/Smart Micro/ANNOTATOR TEST/Cellpose_tiles/data_1_cellpose'
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
@@ -89,24 +93,41 @@ while not os.path.isdir(path_to_data):
 
 # change directory to data
 os.chdir(path_to_data)
+
 # create list of tiles to annotate (exclude 'finished' tiles)
-print('CREATING LIST OF FILES FOR ANNOTATION...')
-tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
-tiles = [file for file in tiles if not '_finished' in file]
+if prefiltered:
+    # check for matching pre-filtered list and data set
+    files_num = re.search(r'data_[0-9]_', path_to_data).group()
+    filtered_num = re.search(r'data_[0-9]_', path_to_prefiltered_files).group()
+    if not files_num == filtered_num:
+        ans = input(f'Potential mismatch between pre-filtered file list (\'{filtered_num}\') and data set (\'{files_num}\').\nEnter \'q\' to exit, or any other key to continue: ')
+        if ans == 'q':
+            raise ValueError('Potential mismatch between pre-filtered file list and data set')
+    
+    # load pre-filtered list
+    prefiltered_files = np.load(path_to_prefiltered_files)
+    tiles = [os.path.join(path_to_data, tile) for tile in prefiltered_files]
+else:
+    print('CREATING LIST OF FILES FOR ANNOTATION...')
+    tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
+    tiles = [file for file in tiles if not '_finished' in file]
 
 # folder for annotation results
-results_folder = os.path.join(path_to_data, 'annotation_results')
+if 'data_' in path_to_data:
+    results_folder = os.path.join(os.path.dirname(path_to_data), 'annotation_results')
+else:
+    results_folder = os.path.join(path_to_data, 'annotation_results')
 
 # set up annotator if there are files to annotate
 if tiles:
+    # disable nn_filter if using prefiltered list
+    if prefiltered:
+        nn_filter = False
+    
     # set up neural network and filtering function if used
     if nn_filter:
         print('LOADING NEURAL NETWORK FILTER...')
         import tensorflow as tf
-        try:
-            path_to_nn_filter = glob.glob(os.path.join(path_to_data,'**','*.hdf5'), recursive=True)[0]
-        except IndexError:
-            raise IndexError('No neural network model file (*.hdf5) found in folder!') from None
         def nn_temp(a,b):return True
         model = tf.keras.models.load_model(path_to_nn_filter, custom_objects={'f1_metric':nn_temp})
         # set filter class/column
@@ -247,7 +268,15 @@ exited = False
 for tile in tiles:
     
     # load Cellpose data (raw image, masks, and outlines)
-    data = np.load(tile, allow_pickle=True).item()
+    if prefiltered:
+        try:
+            data = np.load(tile, allow_pickle=True).item()
+        except FileNotFoundError:
+            continue
+    
+    else:
+        data = np.load(tile, allow_pickle=True).item()
+    
     raw = data['img']
     masks = data['masks']
     outlines = data['outlines']
