@@ -110,7 +110,10 @@ if prefiltered:
 else:
     print('CREATING LIST OF FILES FOR ANNOTATION...')
     tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
+    # remove finished tiles
     tiles = [file for file in tiles if not '_finished' in file]
+    # remove preprocessed file list
+    tiles = [file for file in tiles if not '_preprocessed' in file]
 
 # folder for annotation results
 if 'data_' in path_to_data:
