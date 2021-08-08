@@ -56,6 +56,9 @@ path_to_nn = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline/prophase_cla
 BATCH_SIZE = 1
 # delay in seconds between checking folder
 delay = 5
+
+# visualize results
+visualize_results = True
 ### USER SETUP ###
 
 
@@ -85,32 +88,53 @@ thresh = 0.7
 ### RUN_PIPELINE FUNCTION ###
 def run_pipeline(files, cellpose_model, channels,
                  nn_model, output_classes, input_size, half_size, filter_col, thresh,
-                 results_csv, finished_folder):
+                 results_csv, finished_folder, viz=False):
     
-    print(f'analyzing {len(files)} file(s)')
-
-    # RUN CELLPOSE
-    # imgs = [skimage.io.imread(f) for f in files]
+    # BUILD IMAGES LIST
+    '''
+    # open tiff stack using PIL if 'AttributeError: is_indexed' --> ~5x SLOWER than skimage.io
+    # create array for tif_stack function
+    from PIL import Image
+    def tif_stack(tif_path):
+        dataset = Image.open(tif_path)
+        slices = dataset.n_frames
+        h,w = dataset.size
+        tif_array = np.zeros([slices, h, w])
+        for i in range(slices):
+           dataset.seek(i)
+           tif_array[i,:,:] = np.array(dataset)
     
-    # manually build images list    
+        return tif_array
+    '''
+   
     imgs = []
+    file_names = []
+    file_indexes = []
     for f in files:
         temp_file = skimage.io.imread(f)
         # if tiff stack, add each image indivdually
         if temp_file.ndim > 2:
-            [imgs.append(temp_im) for temp_im in temp_file]
+            for idx, temp_im in enumerate(temp_file):
+                imgs.append(temp_im)
+                file_names.append(f)
+                file_indexes.append(idx)
         # if single tiff image, add
         else:
             imgs.append(temp_file)
+            file_names.append(f)
+            # blank index
+            file_indexes.append('')
 
-    masks = cellpose_model.eval(imgs, diameter=150, flow_threshold=None, channels=channels)[0]
-    # masks = np.array(masks)
-    
+    print(f'analyzing {len(files)} file(s), {len(imgs)} image(s)')
+
+    # RUN CELLPOSE
+    # imgs = [skimage.io.imread(f) for f in files]
+    masks = cellpose_model.eval(imgs, diameter=150, flow_threshold=None, channels=channels)[0]    
+
     # release GPU for tensorflow
     torch.cuda.empty_cache()
     
     print('Cellpose segmentation complete')
-    print(len(imgs), len(masks))
     
     # SEGMENT OUT CELLS FOR ANALYSIS
     X_all = []
@@ -174,31 +198,38 @@ def run_pipeline(files, cellpose_model, channels,
     # make masks for prophase cells
     pro_mask = preds[:,filter_col] > thresh
     file_mask = np.array(file_ref)[pro_mask]
-    # file_name = np.array(files)[file_mask]
-    # file_name = [os.path.basename(f) for f in file_name]
-    # file_array = np.array(files)
-    # file_name = [os.path.basename(file_array[index]) for index in file_mask]
-    cell_centroid = np.array(centers)[pro_mask]
+    # file name mask
+    f_name_mask = np.array(file_names)[file_mask]
+    file_name_mask = [os.path.basename(f) for f in f_name_mask]
+    # file index mask
+    file_index_mask = np.array(file_indexes)[file_mask]
+    # cell centroid mask
+    cell_centroid_mask = np.array(centers)[pro_mask]
     
-    file_name = np.arange(len(X_all))
-    file_name = file_name[file_mask]
-    print(file_name)
-    all_info = np.column_stack([file_name, cell_centroid])
-    print(f'size of data: {all_info.shape}')
-    
+    all_info = np.column_stack([file_name_mask, file_index_mask, cell_centroid_mask])
+        
     # write prophase centroid to results csv
     with open(results_csv, 'a') as f:
         writer = csv.writer(f)
         writer.writerows(all_info)
   
     # view results
-    raw_ims = np.array(imgs)[file_name]
-    for im, (cx, cy) in zip(raw_ims, cell_centroid):
-        plt.cla()
-        plt.axis('off')
-        plt.imshow(im.squeeze(), cmap='gray')
-        plt.scatter(cx,cy, c='r', marker='*')
-        plt.pause(5)
+    if viz and all_info.size:
+        n = int(np.ceil(np.sqrt(len(f_name_mask))))
+        fig = plt.figure()
+        count = 1
+        for fn, idx, (cx, cy) in zip(f_name_mask, file_index_mask, cell_centroid_mask):
+            im = skimage.io.imread(fn)
+            if idx:
+                im = im[int(idx)]
+            ax = fig.add_subplot(n,n,count)
+            ax.set_title(f'{os.path.basename(fn)} {idx}')
+            ax.axis('off')
+            ax.imshow(im.squeeze(), cmap='gray')
+            ax.scatter(cx,cy, c='r', marker='*')
+            count += 1
+        # pause to show image while pipeline runs
+        plt.pause(0.1)
 
     # move files to completed folder
     [os.replace(fil, os.path.join(folder_to_watch, 'completed', current_date, os.path.basename(fil))) for fil in files]
@@ -207,12 +238,6 @@ def run_pipeline(files, cellpose_model, channels,
 """# WATCH FOLDER"""
 
 while True:
-    
-    # release GPU for tensorflow
-    # gc.collect()
-    # torch.cuda.empty_cache()    
-    # tf.keras.backend.clear_session()
-    
     # look for files
     files_all = sorted(glob.glob(os.path.join(folder_to_watch,'**','*.tif'), recursive=True))
     files_all = [file for file in files_all if not 'completed' in file]
@@ -220,11 +245,14 @@ while True:
     files_analyzed = files_all[:BATCH_SIZE]
     
     if len(files_all) >= BATCH_SIZE:
+        print('----------------------------')
         start = time.time()
         run_pipeline(files_analyzed, cellpose_model, channels,
                      nn_model, output_classes, input_size, half_size, filter_col, thresh,
-                     results_csv, finished_folder)
-        print(time.time()-start)
+                     results_csv, finished_folder, viz=visualize_results)
+        print(f'pipeline timetime: {time.time()-start}')
+        print('----------------------------')
+              
     else:
         print('waiting for files...')
         time.sleep(delay)
