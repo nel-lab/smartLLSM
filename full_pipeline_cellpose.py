@@ -45,12 +45,12 @@ print('-----------------------------------------------')
 """# USER INPUT, SETUP"""
 
 ### USER SETUP ###
-folder_to_watch = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline/watch_folder'
+folder_to_watch = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline_cellpose_test/watch_folder'
 
 current_date = time.strftime('%m_%d_%y')
 results_csv = os.path.join(folder_to_watch, f'results_{current_date}.csv')
 
-path_to_nn = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline/prophase_classifier_5_10.hdf5'
+path_to_nn = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline_cellpose_test/prophase_classifier_5_10.hdf5'
 
 # number of files to analyze at a time
 BATCH_SIZE = 1
@@ -209,27 +209,28 @@ def run_pipeline(files, cellpose_model, channels,
     all_info = np.column_stack([file_name_mask, file_index_mask, cell_centroid_mask])
         
     # write prophase centroid to results csv
-    with open(results_csv, 'a') as f:
-        writer = csv.writer(f)
-        writer.writerows(all_info)
+    if all_info.size:
+        with open(results_csv, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerows(all_info)
   
-    # view results
-    if viz and all_info.size:
-        n = int(np.ceil(np.sqrt(len(f_name_mask))))
-        fig = plt.figure()
-        count = 1
-        for fn, idx, (cx, cy) in zip(f_name_mask, file_index_mask, cell_centroid_mask):
-            im = skimage.io.imread(fn)
-            if idx:
-                im = im[int(idx)]
-            ax = fig.add_subplot(n,n,count)
-            ax.set_title(f'{os.path.basename(fn)} {idx}')
-            ax.axis('off')
-            ax.imshow(im.squeeze(), cmap='gray')
-            ax.scatter(cx,cy, c='r', marker='*')
-            count += 1
-        # pause to show image while pipeline runs
-        plt.pause(0.1)
+        # view results
+        if viz:
+            n = int(np.ceil(np.sqrt(len(f_name_mask))))
+            fig = plt.figure()
+            count = 1
+            for fn, idx, (cx, cy) in zip(f_name_mask, file_index_mask, cell_centroid_mask):
+                im = skimage.io.imread(fn)
+                if idx:
+                    im = im[int(idx)]
+                ax = fig.add_subplot(n,n,count)
+                ax.set_title(f'{os.path.basename(fn)} {idx}')
+                ax.axis('off')
+                ax.imshow(im.squeeze(), cmap='gray')
+                ax.scatter(cx,cy, c='r', marker='*')
+                count += 1
+            # pause to show image while pipeline runs
+            plt.pause(0.1)
 
     # move files to completed folder
     [os.replace(fil, os.path.join(folder_to_watch, 'completed', current_date, os.path.basename(fil))) for fil in files]
@@ -250,7 +251,7 @@ while True:
         run_pipeline(files_analyzed, cellpose_model, channels,
                      nn_model, output_classes, input_size, half_size, filter_col, thresh,
                      results_csv, finished_folder, viz=visualize_results)
-        print(f'pipeline timetime: {time.time()-start}')
+        print(f'pipeline time: {time.time()-start}')
         print('----------------------------')
               
     else:
