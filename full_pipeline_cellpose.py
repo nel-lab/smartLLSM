@@ -18,9 +18,9 @@ import torch
 from cellpose import models
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning) # silence PyTorch warnings about changed behavior...
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # silence Tensorflow error message about not being optimized... 0=print all, 1=don't print INFO
 
 import tensorflow as tf
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence Tensorflow error message about not being optimized...
 # release GPU for Pytorch
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
@@ -248,7 +248,8 @@ def run_pipeline(files, cellpose_model, channels,
 ### RUN_PIPELINE FUNCTION ###
 
 #%% WATCH FOLDER
-
+start_loop_time = time.time()
+        
 while True:
     # look for files
     files_all = sorted(glob.glob(os.path.join(folder_to_watch,'**','*.tif'), recursive=True))
@@ -271,5 +272,5 @@ while True:
         [os.replace(fil, os.path.join(finished_folder, os.path.basename(fil))) for fil in files_analyzed]
               
     else:
-        print('waiting for files...')
+        print(f'waiting for files...{len(files_all)} file(s)  time: {time.time()-start_loop_time}', end='\r') #end='\r' will prevent generating a new line and will overwrite this line over and over
         time.sleep(delay)
