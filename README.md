@@ -42,3 +42,7 @@ Classifier model:
 
 Score threshold for having the microscope go take a high resolution 3D image of:
 `thresh = 0.7`
+
+# FCN Install instructions
+
+'''connda create -n sm_FCN tensorflow-gpu=2 spyder numpy opencv matplotlib'''
