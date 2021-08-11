@@ -29,3 +29,16 @@ This will start the classifier pipeline, which will watch the "watch folder" for
 
 Parameters are specified in `full_pipeline_cellpose.py` 
 
+Parameters to pay attention to :
+
+Folder where image files need to be sent:
+
+`folder_to_watch = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline_cellpose_test/watch_folder'  `
+
+
+Classifier model:
+
+`path_to_nn = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline_cellpose_test/prophase_classifier_5_10.hdf5'`
+
+Score threshold for having the microscope go take a high resolution 3D image of:
+`thresh = 0.7`
