@@ -30,6 +30,7 @@ for gpu in gpus:
 # config.gpu_options.allow_growth=True
 # sess = tf.compat.v1.Session(config=config)
 
+import matplotlib
 import matplotlib.pyplot as plt
 
 # disable Cellpose's ~very~ verbose outputs
@@ -56,7 +57,12 @@ BATCH_SIZE = 1
 delay = 5
 
 # visualize results
-visualize_results = True
+visualize_results = False
+
+# order cells by score to set thresh
+set_thresh = True
+# minuimum score to show
+set_thresh_thresh = 0.2
 ### USER SETUP ###
 
 
@@ -66,6 +72,13 @@ os.makedirs(os.path.join(folder_to_watch, 'completed', current_date), exist_ok=T
 
 # set folder for finished images
 finished_folder = os.path.join(folder_to_watch, 'completed', current_date)
+
+# set up threshold folder
+if set_thresh:
+    thresh_folder = os.path.join(folder_to_watch, 'set_thresh')
+    os.makedirs(thresh_folder, exist_ok=True)
+else:
+    thresh_folder=False
 
 # CELLPOSE MODEL
 use_GPU = models.use_gpu()
@@ -86,24 +99,7 @@ thresh = 0.7
 ### RUN_PIPELINE FUNCTION ###
 def run_pipeline(files, cellpose_model, channels,
                  nn_model, output_classes, input_size, half_size, filter_col, thresh,
-                 results_csv, viz=False):
-    
-    # BUILD IMAGES LIST
-    '''
-    # open tiff stack using PIL if 'AttributeError: is_indexed' --> ~5x SLOWER than skimage.io
-    # create array for tif_stack function
-    from PIL import Image
-    def tif_stack(tif_path):
-        dataset = Image.open(tif_path)
-        slices = dataset.n_frames
-        h,w = dataset.size
-        tif_array = np.zeros([slices, h, w])
-        for i in range(slices):
-           dataset.seek(i)
-           tif_array[i,:,:] = np.array(dataset)
-    
-        return tif_array
-    '''
+                 results_csv, viz=False, thresh_folder=False, set_thresh_thresh=0.2):
    
     imgs = []
     file_names = []
@@ -195,8 +191,8 @@ def run_pipeline(files, cellpose_model, channels,
     
     # make masks for prophase cells
     pro_mask = preds[:,filter_col] > thresh
-    file_mask = np.array(file_ref)[pro_mask]
     # file name mask
+    file_mask = np.array(file_ref)[pro_mask]
     f_name_mask = np.array(file_names)[file_mask]
     file_name_mask = [os.path.basename(f) for f in f_name_mask]
     # file index mask
@@ -207,6 +203,14 @@ def run_pipeline(files, cellpose_model, channels,
     cell_score_mask = preds[:,filter_col][pro_mask].round(3)
         
     all_info = np.column_stack([file_name_mask, file_index_mask, cell_centroid_mask, cell_score_mask])
+    
+    # save images for set_thresh
+    if thresh_folder:
+        thresh_mask = preds[:,filter_col] > set_thresh_thresh
+        cell_score_mask_set_thresh = preds[:,filter_col][thresh_mask]
+        for img, score in zip(X_all[thresh_mask], cell_score_mask_set_thresh):
+            matplotlib.image.imsave(os.path.join(thresh_folder, str((score*100).round(1))+'.tiff'), img.squeeze(), cmap='gray')
+            # cv2.imwrite(os.path.join(thresh_folder, str((score*100).round(1))+'.png'), img.squeeze())
     
     # write prophase centroid to results csv
     if all_info.size:
@@ -232,7 +236,7 @@ def run_pipeline(files, cellpose_model, channels,
             # pause to show image while pipeline runs
             plt.pause(0.1)
             
-        return True
+        return cell_score_mask.max()
     
     # just write file name       
     else:
@@ -257,7 +261,9 @@ while True:
         start = time.time()
         cell_found = run_pipeline(files_analyzed, cellpose_model, channels,
                      nn_model, output_classes, input_size, half_size, filter_col, thresh,
-                     results_csv, viz=visualize_results)
+                     results_csv, viz=visualize_results, thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
+        
+        print(f'cell found: {cell_found}')
         print(f'pipeline time: {time.time()-start}')
         print('----------------------------')
         
