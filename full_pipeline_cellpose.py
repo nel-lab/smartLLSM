@@ -248,7 +248,8 @@ def run_pipeline(files, cellpose_model, channels,
 ### RUN_PIPELINE FUNCTION ###
 
 #%% WATCH FOLDER
-
+start_loop_time = time.time()
+        
 while True:
     # look for files
     files_all = sorted(glob.glob(os.path.join(folder_to_watch,'**','*.tif'), recursive=True))
@@ -271,5 +272,5 @@ while True:
         [os.replace(fil, os.path.join(finished_folder, os.path.basename(fil))) for fil in files_analyzed]
               
     else:
-        print('waiting for files...')
+        print(f'waiting for files...{len(files_all)} file(s)  time: {time.time()-start_loop_time}', end='\r') #end='\r' will prevent generating a new line and will overwrite this line over and over
         time.sleep(delay)
