@@ -45,4 +45,4 @@ Score threshold for having the microscope go take a high resolution 3D image of:
 
 # FCN Install instructions
 
-'''connda create -n sm_FCN tensorflow-gpu=2 spyder numpy opencv matplotlib'''
+```conda create -n sm_FCN tensorflow-gpu=2 spyder numpy opencv matplotlib```
