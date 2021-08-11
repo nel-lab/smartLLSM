@@ -18,9 +18,9 @@ import torch
 from cellpose import models
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning) # silence PyTorch warnings about changed behavior...
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # silence Tensorflow error message about not being optimized... 0=print all, 1=don't print INFO
 
 import tensorflow as tf
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence Tensorflow error message about not being optimized...
 # release GPU for Pytorch
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:
