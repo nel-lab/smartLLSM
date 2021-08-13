@@ -55,9 +55,9 @@ def get_conv(input_shape=(286, 286, 1), filename=None):
 # input_size = (286, 286)
 # half_size = input_size[0]//2
 
-tile_path = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
-# files = sorted(glob.glob(os.path.join(tile_path, '**','*.npz'), recursive=True))
-# files = [fil for fil in files if not 'og_backup' in fil]
+tile_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
+files = sorted(glob.glob(os.path.join(tile_path, '**','*.npz'), recursive=True))
+files = [fil for fil in files if not 'og_backup' in fil]
 
 # nn_path = '/home/nel-lab/Desktop/Jimmy/Smart Micro/FCN/2021-06-16-18-58-19.214988.h5'
 nn_path = '/home/nel/Desktop/Smart Micro/FCN/2021-08-04-15-57-31.199175_edge.h5'
@@ -448,7 +448,7 @@ for count, file in enumerate(files):
     dat = np.load(file, allow_pickle=True)
     
     raw = dat['raw'].copy()
-    raw = cv2.copyMakeBorder(raw,143,143,143,143,0)
+    # raw = cv2.copyMakeBorder(raw,143,143,143,143,0)
     mask = dat['masks']
     labels = dat['labels']
     labels_dict = dat['labels_dict'].item()
@@ -471,29 +471,17 @@ for count, file in enumerate(files):
     batch=[]
     for i1,i in enumerate(range(143,raw_FCN_bigger.shape[1]-143,16)):
         for j1,j in enumerate(range(143, raw_FCN_bigger.shape[1]-143, 16)):
-            print((i1,j1))
+            # print((i1,j1))
             batch.append(raw_FCN_bigger[:1,i-143:i+143,j-143:j+143,:1])
     batch=np.concatenate(batch, axis=0)
     
     res = heatmodel.predict(batch)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    res = heatmodel.predict(raw_FCN)
-
+    res = res.reshape(50,50,5)
+    pro = res[:,:,pro_col]
+    print(pro.max())
     
-    if pro.max()>0.7:
+    if pro.max()>0.5:
         pass
     elif len(pro_id) > 0:
         pass
@@ -527,7 +515,7 @@ for count, file in enumerate(files):
         sh_x_n = (sh_x - ms_h + (log_xm1_y - log_xp1_y)/(2 * log_xm1_y - four_log_xy + 2 * log_xp1_y))
         sh_y_n = (sh_y - ms_w + (log_x_ym1 - log_x_yp1)/ (2 * log_x_ym1 - four_log_xy + 2 * log_x_yp1))
         
-    factor = raw_FCN.shape[1]/(pro.shape[0]-bord)
+    factor = 16
 
     completed += 1
     # if completed == num_to_break:
@@ -547,7 +535,7 @@ for count, file in enumerate(files):
         from matplotlib.patches import Rectangle
         ax.add_patch(Rectangle((factor*sh_y_n-286/2, factor*sh_x_n-286/2), 286, 286, fill=False, edgecolor='g'))
         
-        # res = tf.transpose(res, perm=[0, 3, 1, 2]).numpy()
+        res = tf.transpose(res, perm=[2, 0, 1]).numpy()
         for num, i in enumerate(res.squeeze()):
           ax = fig2.add_subplot(num_to_show,6,6*6*(num_to_show-1)+2+num)
           ax.imshow(i, cmap='gray')
