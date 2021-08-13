@@ -15,6 +15,7 @@ from sklearn import metrics
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message about not being optimized...
 
 import datetime
+import time
 
 def get_conv(input_shape=(286, 286, 1), filename=None):
 
@@ -459,6 +460,8 @@ for count, file in enumerate(files):
     
     # raw = plt.imread(file)
     
+    start = time.time()
+    
     raw_FCN = raw - raw.mean()
     raw_FCN /= raw.std()
     raw_FCN = raw_FCN[np.newaxis,...,np.newaxis]
@@ -466,7 +469,6 @@ for count, file in enumerate(files):
     # add border, batch sliding window
     raw_FCN_bigger = cv2.copyMakeBorder(raw_FCN.squeeze(), 143, 143, 143, 143, 0)
     raw_FCN_bigger = raw_FCN_bigger[np.newaxis, ..., np.newaxis]
-    print(raw_FCN_bigger.shape)
     
     batch=[]
     for i1,i in enumerate(range(143,raw_FCN_bigger.shape[1]-143,16)):
@@ -497,7 +499,7 @@ for count, file in enumerate(files):
     top_left = cv2.minMaxLoc(pro)[-1]
     sh_y, sh_x = top_left
   
-    if sh_y == 0+bord or sh_y == pro.shape[0]-bord-1 or sh_x == 0+bord or sh_x == pro.shape[0]-bord-1:
+    if sh_y == 0 or sh_y == pro.shape[0] or sh_x == 0 or sh_x == pro.shape[0]:
     # if sh_y == pro.shape[0]-1 or sh_x == pro.shape[0]-1:
       # continue
       sh_y_n = sh_y
@@ -553,25 +555,14 @@ for count, file in enumerate(files):
         print(sh_y, sh_x)
         print()
         
-        break
+        # break
+    
+    print('pipeline time:', time.time()-start)
     
 
     
     if completed >= num_to_break:
         break
-    
-
-
-
-
-
-
-
-
-
-
-
-
 
 #%% pass sliding window in batches
 raw_FCN_bigger = cv2.copyMakeBorder(raw_FCN.squeeze(), 143, 143, 143, 143, 0)
@@ -598,9 +589,3 @@ for i in range(5):
     plt.imshow(res[:,:,:,i].reshape(50,50), cmap='gray')
     plt.title(label[i]+' heatmap')
     plt.axis('off')
-
-#%%
-for i in range(5):
-    plt.subplot(1,6,i+1)
-    plt.imshow(cv2.copyMakeBorder(np.reshape(res[:,:,:,i],(33,33)), 16, 16, 16, 16, 0), cmap='gray')
-plt.subplot(1,6,6);plt.imshow(raw, cmap='gray')

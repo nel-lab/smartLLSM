@@ -29,10 +29,14 @@ JN = False
 RE_RE_annotate = False
 
 # list of IDs to redo
-redo = ['prophase','unknown']
+redo = ['prophase']
+
+'''
+confirmed_list.append(redo)
+'''
 
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_data = '/Users/jimmytabet/NEL/Projects/Smart Micro/datasets/ANNOTATOR TEST/Cellpose_tiles'
+path_to_data = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles'
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
