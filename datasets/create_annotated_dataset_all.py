@@ -12,9 +12,8 @@ import numpy as np
 from scipy import ndimage
 
 #%% new annotated data
-path = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
+path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
 files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
-files = [file for file in files if not 'og_backup' in file]
 no_tiles = len(files)
 
 # bounding box square 192 pixels long centered at 150
@@ -26,9 +25,6 @@ y = []
 count = 0
 for file in files:
     dat = np.load(file, allow_pickle=True)
-    # print(dat.files)
-    labels_dict = dat['labels_dict'].item()
-    # labels.append([labels_dict[j] for j in dat['labels']])
 
     raw = dat['raw']
     masks = dat['masks']
@@ -74,7 +70,7 @@ for file in files:
         final[r1-r1_o:r2-r1_o,c1-c1_o:c2-c1_o] = raw[r1:r2,c1:c2]
 
         X.append(final)
-        y.append(labels_dict[dat['labels'][idx]])
+        y.append(dat['labels'][idx])
 
     if count == 0:
         print(f'{count}\tof\t{no_tiles}')
