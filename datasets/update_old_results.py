@@ -16,19 +16,24 @@ folder = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/anno
 files = sorted(glob.glob(os.path.join(folder,'**','*.npz'), recursive=True))
 
 for count, i in enumerate(files):
-    if 'data_1' in i:
-        initials = 'KH'
-    elif 'data_2' in i:
-        initials = 'MC'
-    else:
-        raise ValueError('not data 1 or 2')
+    initials = 'MC'
+    
+    # if 'data_1' in i:
+    #     initials = 'KH'
+    # elif 'data_2' in i:
+    #     initials = 'MC'
+    # else:
+    #     raise ValueError('not data 1 or 2')
         
     dat = np.load(i, allow_pickle=True)
     
+    filedic = dict(dat)
+    if 'confirmed' in filedic:
+        continue
+    
     labels_dict = dat['labels_dict'].item()
     stage = [labels_dict[j] for j in dat['labels']]
-
-    filedic = dict(dat)
+    
     filedic['labels'] = stage
     filedic[f'labels_{initials}'] = stage
     filedic['confirmed'] = []
