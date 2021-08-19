@@ -6,7 +6,7 @@ Created on Wed Aug  4 10:17:13 2021
 @author: jimmytabet
 """
 
-#%%
+#%% loop
 import os, glob
 import numpy as np
 from scipy import ndimage
@@ -14,16 +14,13 @@ from scipy import ndimage
 import matplotlib.pyplot as plt
 from skimage.util import montage
 
-path_to_data = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles'
-tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npy'), recursive=True))
-tiles = [file for file in tiles if not '_finished' in file]
+path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles'
+tiles = sorted(glob.glob(os.path.join(path,'**','*.npy'), recursive=True))
+# tiles = [file for file in tiles if not '_finished' in file]
 tiles = [file for file in tiles if not '_preprocessed' in file]
 
-np.random.shuffle(tiles)
-
-
 # bounding box square 192 pixels long centered at 150
-bb_size = 286
+bb_size = 200
 half_size = bb_size//2
 
 points = []
@@ -34,7 +31,6 @@ for i,j in zip(x_grid.flatten(), y_grid.flatten()):
 points = np.array(points)
 
 X = []
-y = []
 blanks = 0
 for i, tile in enumerate(tiles):
     
@@ -93,17 +89,22 @@ for i, tile in enumerate(tiles):
     final[r1-r1_o:r2-r1_o,c1-c1_o:c2-c1_o] = raw[r1:r2,c1:c2]
 
     X.append(final)
-    y.append('blank')
         
     # if blanks > 800:
     #     break
     
-#%%
+#%% initial results
 X = np.stack(X)
-y = np.array(y)
-print(X.shape)
+plt.imshow(montage(X), cmap='gray')
+
+#%% refine
+X_ref = np.delete(X, [205], axis=0)
+
+#%% show/save
+plt.imshow(montage(X_ref), cmap='gray')
+y = np.array(['blank' for _ in X_ref])
+
+print(X_ref.shape)
 print(y.shape)
 
-# np.savez('/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_BLANKS.npz', X=X, y=y)
-
-plt.imshow(montage(X), cmap='gray')
+np.savez('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/blanks_fov200_0817.npz', X=X_ref, y=y)

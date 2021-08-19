@@ -11,10 +11,13 @@ Created on Fri Aug 13 11:34:23 2021
 import os, h5py, platform
 from collections import Counter
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, auc
 
 import tensorflow as tf
+from tensorflow.keras.utils import to_categorical
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message about not being optimized...
 
 print('python:', platform.python_version())
@@ -22,7 +25,7 @@ print('tf:', tf.__version__)
 print('h5py:', h5py.version.version)
 
 #%% load data
-fil = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_0819.npz'
+fil = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/annotated_fov286_0819.npz'
 
 with np.load(fil, allow_pickle=True) as dat:
     X_org = dat['X']
@@ -31,13 +34,14 @@ with np.load(fil, allow_pickle=True) as dat:
 print(Counter(y_org))
 
 #%% clean data
-remove_mask = (y_org == 'junk') | (y_org == 'other') | (y_org == 'TBD')
+remove_mask = (y_org == 'junk') | (y_org == 'other') | (y_org == 'TBD') | (y_org == 'edge')
 # include early prophase cells with prophase
 y_org[y_org == 'early_prophase'] = 'prophase'
 X_mask = X_org[~remove_mask]
 y_mask = y_org[~remove_mask]
 
-unique = ['metaphase', 'telophase', 'anaphase', 'prometaphase']
+# unique = ['metaphase', 'telophase', 'anaphase', 'prometaphase']
+unique = []
 
 # choose up to 800 random cells
 X_all, y_all = [], []
@@ -45,7 +49,7 @@ for i in np.unique(y_mask):
     mask = np.isin(y_mask, i)    
     X = X_mask[mask]
     
-    total_count = 800
+    total_count = 400
     if i in unique: total_count /= len(unique)
 
     rand_mask = np.random.choice(len(X), min(len(X), int(total_count)), replace=False)
@@ -70,15 +74,15 @@ print('og')
 print('train:', Counter(y_train))
 print('test:', Counter(y_test))
 
-for y in [y_train, y_test]:
-    mask = (y=='metaphase') | (y=='telophase') | (y=='anaphase') | (y=='prometaphase')# | (y=='prophase')
-    y[mask] = 'unique'
-    # y[y=='prometaphase']='prophase'
+# for y in [y_train, y_test]:
+#     mask = (y=='metaphase') | (y=='telophase') | (y=='anaphase') | (y=='prometaphase')# | (y=='prophase')
+#     y[mask] = 'unique'
+#     # y[y=='prometaphase']='prophase'
 
-print()
-print('unique')
-print('train:', Counter(y_train))
-print('test:', Counter(y_test))
+# print()
+# print('unique')
+# print('train:', Counter(y_train))
+# print('test:', Counter(y_test))
 
 #%% load data from previous models
 # data = np.load('/content/drive/MyDrive/smart_micro/smart_micro/prophase_classifier_data_5_10.npz')
@@ -86,7 +90,6 @@ print('test:', Counter(y_test))
 # X_test, y_test = data['X_test'], data['y_test']
 
 #%% convert labels to numerical and one_hot vectors
-from tensorflow.keras.utils import to_categorical
 label = np.unique(y_train)
 y_train_num = np.array([np.argwhere(i==label) for i in y_train]).squeeze()
 y_train_one_hot = to_categorical(y_train_num, num_classes=len(label), dtype = 'int')
@@ -130,43 +133,29 @@ datagen.fit(X_train)
 # plt.subplot(122); plt.imshow(montage(a.squeeze(), padding_width=10), cmap='gray'); plt.axis('off'); plt.title('preprocessed')
 
 #%% define model
-def get_conv(input_shape=(200, 200, 1), filename=None):
+model = tf.keras.models.Sequential([
+tf.keras.layers.Conv2D(16, (3,3), activation='relu', input_shape=(X_train[0].shape[1], X_train[2].shape[1],1)),
+tf.keras.layers.MaxPooling2D(2, 2),
 
-    model = tf.keras.models.Sequential([
-    tf.keras.layers.Conv2D(16, (3,3), activation='relu', padding='same', input_shape=input_shape), #(None, None, 1)),#X_train.shape[1:])),
-    tf.keras.layers.MaxPooling2D(2, 2),
+tf.keras.layers.Conv2D(32, (3,3), activation='relu'),
+tf.keras.layers.MaxPooling2D(2,2),
 
-    tf.keras.layers.Conv2D(32, (3,3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D(2,2),
+tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+tf.keras.layers.MaxPooling2D(2,2),
 
-    tf.keras.layers.Conv2D(64, (3,3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D(2,2),
+tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+tf.keras.layers.MaxPooling2D(2,2),
 
-    tf.keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D(2,2),
+tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+tf.keras.layers.MaxPooling2D(2,2),
 
-    tf.keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D(2,2),
-
-    tf.keras.layers.Conv2D(64, kernel_size=6, activation='relu'),
-    tf.keras.layers.Dropout(0.5),
-    tf.keras.layers.BatchNormalization(),
-
-    tf.keras.layers.Conv2D(len(np.unique(y_train)), kernel_size=1, activation='softmax'),
-    # tf.keras.layers.Conv2D(len(np.unique(y_train)), kernel_size=1),
-    # tf.keras.layers.Dropout(0.5),
-    # tf.keras.layers.BatchNormalization(),
-    # tf.keras.layers.GlobalMaxPooling2D(),
-    # tf.keras.layers.Activation('softmax')
-    ], name='__temp__'.join(label))
-
-    if filename:
-        model.load_weights(filename)
-    return model
-
-#%% add dense layer for training
-model = get_conv()
-model.add(tf.keras.layers.Flatten())
+tf.keras.layers.Flatten(),
+tf.keras.layers.Dense(units=128, activation='relu'),
+tf.keras.layers.Dropout(0.5),
+tf.keras.layers.Dense(units=128, activation='relu'),
+tf.keras.layers.Dropout(0.5),
+# tf.keras.layers.Dense(1, activation='sigmoid')])
+tf.keras.layers.Dense(len(np.unique(y_train)), activation='softmax')], name='__temp__'.join(label))
 
 print(model.summary())
 
@@ -226,7 +215,7 @@ plt.legend()
 #%% save model
 import datetime
 
-save_dir = f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/{datetime.date.today()}'
+save_dir = f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/reg_models/{datetime.date.today()}'
 model_name = '_'.join(label)
 
 if not os.path.isdir(save_dir):
@@ -249,3 +238,42 @@ np.savez(os.path.join(save_dir, model_name) + '_data', X_train=X_train, y_train=
 #     dat = X[y==stage]
 #     for count, i in enumerate(dat.squeeze()):
 #       matplotlib.image.imsave(f'{stage}/{count}.tiff', i, cmap='gray')
+
+#%% confusion matrix
+preds = model.predict(datagen.standardize(X_test.astype(np.float32)))
+results = np.array([label[i] for i in np.argmax(preds, axis=1)])
+
+disp = ConfusionMatrixDisplay(confusion_matrix(y_test, results), display_labels=label)
+disp.plot(xticks_rotation='vertical')
+
+con_matrix = pd.DataFrame(confusion_matrix(y_test, results), index = [i+'_true' for i in label], columns = [i+'_pred' for i in label])
+print(con_matrix)
+
+#%% ROC curve
+col = np.argwhere(label=='prophase').squeeze()
+
+fpr = {}
+tpr = {}
+roc_auc = {}
+for i in range(len(label)):
+    fpr[i], tpr[i], _ = roc_curve(y_test_one_hot[:, i], preds[:, i])
+    roc_auc[i] = auc(fpr[i], tpr[i])
+
+# # LOG LOG
+# # plt.plot(fpr[int(col)], tpr[int(col)])
+# plt.plot(np.log(fpr[int(col)]), np.log(tpr[int(col)]))
+# plt.title('log-log ROC Prophase, AUC = '+str(roc_auc[int(col)].round(3)))
+# plt.xlabel('log(False Positive Rate)')
+# plt.ylabel('log(True Positive Rate)')
+# # plt.ylim([-.72, 0.05])
+# # plt.xlim([-6.5,0.1])
+# # plt.savefig('log_roc_pro.pdf', dpi=300, bbox_inches="tight")
+
+# REG
+plt.plot((fpr[int(col)]), (tpr[int(col)]))
+plt.title('ROC Prophase, AUC = '+str(roc_auc[int(col)].round(3)))
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+# plt.ylim([-.72, 0.05])
+# plt.xlim([-6.5,0.1])
+plt.savefig('roc_pro.pdf', dpi=300, bbox_inches="tight")

@@ -7,17 +7,24 @@ Created on Wed Feb 17 15:56:52 2021
 """
 
 #%% imports
-import os,glob
+import os,glob,random,datetime
 import numpy as np
 from scipy import ndimage
 
 #%% new annotated data
 path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
-files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
+all_files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
+
+random.shuffle(all_files)
+
+split = int(.7*len(all_files))
+files = all_files[:split]
+test_files = all_files[split:]
 no_tiles = len(files)
 
+#%%
 # bounding box square 192 pixels long centered at 150
-bb_size = 286
+bb_size = 200
 half_size = bb_size//2
 
 X = []
@@ -88,7 +95,25 @@ y = np.array(y)
 print(X.shape)
 print(y.shape)
 
-np.savez('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/annotated_fov286_0819.npz', X=X, y=y)
+#%% combine with blank cells
+blanks = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/blanks_fov200_0817.npz'
+
+data_blanks = np.load(blanks)
+X_blanks, y_blanks = data_blanks['X'], data_blanks['y']
+
+X_all = np.concatenate([X, X_blanks])
+y_all = np.concatenate([y, y_blanks])
+
+print(X_all.shape, y_all.shape)
+print(np.unique(y_all))
+
+#%% save
+# np.savez('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_0819.npz', X=X_all, y=y_all)
+
+# save_dir = f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/{datetime.date.today()}'
+# if not os.path.isdir(save_dir):
+#     os.makedirs(save_dir)
+# np.save(os.path.join(save_dir, 'test_files'), test_files)
 
 #%%
 from collections import Counter
