@@ -16,7 +16,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message abou
 
 #%% load model
 
-nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-19/blank_blurry_edge_interphase_prophase_unique.h5'
+nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-20/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
 label = nn_path.split('.')[-2].split('/')[-1].split('_')
 
 def get_conv(input_shape=(200, 200, 1), filename=None):
@@ -56,7 +56,7 @@ def get_conv(input_shape=(200, 200, 1), filename=None):
 heatmodel = get_conv(input_shape=(None, None, 1), filename=nn_path)
 
 #%% load test annotation results
-files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-19/test_files.npy'))
+files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-20/test_files.npy'))
 
 #%% loop
 train_shape = 200
@@ -167,7 +167,7 @@ center_dist = np.array(center_dist)
 dist_thresh = 100
 TPR_all = []
 FPR_all = []
-for pro_thresh in [0.7]:#np.linspace(0,1,1001):
+for pro_thresh in np.linspace(0,1,1001):
     
     FCN_pro = FCN_max > pro_thresh
     

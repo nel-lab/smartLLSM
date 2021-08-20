@@ -22,7 +22,7 @@ print('tf:', tf.__version__)
 print('h5py:', h5py.version.version)
 
 #%% load data
-fil = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_0819.npz'
+fil = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_0820.npz'
 
 with np.load(fil, allow_pickle=True) as dat:
     X_org = dat['X']
@@ -31,13 +31,14 @@ with np.load(fil, allow_pickle=True) as dat:
 print(Counter(y_org))
 
 #%% clean data
-remove_mask = (y_org == 'junk') | (y_org == 'other') | (y_org == 'TBD')
+remove_mask = (y_org == 'junk') | (y_org == 'other') | (y_org == 'TBD')# | (y_org == 'early_prophase')
 # include early prophase cells with prophase
 y_org[y_org == 'early_prophase'] = 'prophase'
 X_mask = X_org[~remove_mask]
 y_mask = y_org[~remove_mask]
 
-unique = ['metaphase', 'telophase', 'anaphase', 'prometaphase']
+# unique = ['metaphase', 'telophase', 'anaphase', 'prometaphase']
+unique = []
 
 # choose up to 800 random cells
 X_all, y_all = [], []
@@ -45,7 +46,7 @@ for i in np.unique(y_mask):
     mask = np.isin(y_mask, i)    
     X = X_mask[mask]
     
-    total_count = 800
+    total_count = 400
     if i in unique: total_count /= len(unique)
 
     rand_mask = np.random.choice(len(X), min(len(X), int(total_count)), replace=False)
@@ -70,15 +71,15 @@ print('og')
 print('train:', Counter(y_train))
 print('test:', Counter(y_test))
 
-for y in [y_train, y_test]:
-    mask = (y=='metaphase') | (y=='telophase') | (y=='anaphase') | (y=='prometaphase')# | (y=='prophase')
-    y[mask] = 'unique'
-    # y[y=='prometaphase']='prophase'
+# for y in [y_train, y_test]:
+#     mask = (y=='metaphase') | (y=='telophase') | (y=='anaphase') | (y=='prometaphase')# | (y=='prophase')
+#     y[mask] = 'unique'
+#     # y[y=='prometaphase']='prophase'
 
-print()
-print('unique')
-print('train:', Counter(y_train))
-print('test:', Counter(y_test))
+# print()
+# print('unique')
+# print('train:', Counter(y_train))
+# print('test:', Counter(y_test))
 
 #%% load data from previous models
 # data = np.load('/content/drive/MyDrive/smart_micro/smart_micro/prophase_classifier_data_5_10.npz')
@@ -188,7 +189,7 @@ model.compile(loss='categorical_crossentropy',
 optimizer=tf.keras.optimizers.Adam(lr=0.001),
 metrics=['accuracy',f1_metric])
 
-early_stopping = tf.keras.callbacks.EarlyStopping(patience=15, restore_best_weights=True)
+early_stopping = tf.keras.callbacks.EarlyStopping(patience=45, restore_best_weights=True)
 
 history = model.fit(datagen.flow(X_train, y_train_one_hot, batch_size=64),
 steps_per_epoch=len(X_train) // 64, 
@@ -197,7 +198,7 @@ verbose=1,
 validation_data=(datagen.standardize(X_test.astype(np.float32)), y_test_one_hot),
 class_weight=class_weight,
 shuffle=True,
-# callbacks=[early_stopping],
+callbacks=[early_stopping],
 )
 
 #%% evaluate model
@@ -241,11 +242,3 @@ print(f'Trained model saved here: {model_path}')
 # model.save('/content/drive/MyDrive/smart_micro/smart_micro/annotator_filter_0419.hdf5')
 # model = keras.models.load_model('/content/drive/MyDrive/smart_micro/smart_micro/prophase_classifier_5_10.hdf5', custom_objects={'f1_metric':f1_metric})
 np.savez(os.path.join(save_dir, model_name) + '_data', X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test)
-
-#%% create tiff zips
-# import matplotlib
-
-# for stage in np.unique(y):
-#     dat = X[y==stage]
-#     for count, i in enumerate(dat.squeeze()):
-#       matplotlib.image.imsave(f'{stage}/{count}.tiff', i, cmap='gray')

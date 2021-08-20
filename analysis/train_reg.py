@@ -25,7 +25,7 @@ print('tf:', tf.__version__)
 print('h5py:', h5py.version.version)
 
 #%% load data
-fil = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/annotated_fov286_0819.npz'
+fil = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/annotated_fov286_0820.npz'
 
 with np.load(fil, allow_pickle=True) as dat:
     X_org = dat['X']
@@ -34,9 +34,9 @@ with np.load(fil, allow_pickle=True) as dat:
 print(Counter(y_org))
 
 #%% clean data
-remove_mask = (y_org == 'junk') | (y_org == 'other') | (y_org == 'TBD') | (y_org == 'edge')
+remove_mask = (y_org == 'junk') | (y_org == 'other') | (y_org == 'TBD') | (y_org == 'edge') | (y_org == 'early_prophase')
 # include early prophase cells with prophase
-y_org[y_org == 'early_prophase'] = 'prophase'
+# y_org[y_org == 'early_prophase'] = 'prophase'
 X_mask = X_org[~remove_mask]
 y_mask = y_org[~remove_mask]
 
@@ -177,7 +177,7 @@ model.compile(loss='categorical_crossentropy',
 optimizer=tf.keras.optimizers.Adam(lr=0.001),
 metrics=['accuracy',f1_metric])
 
-early_stopping = tf.keras.callbacks.EarlyStopping(patience=15, restore_best_weights=True)
+early_stopping = tf.keras.callbacks.EarlyStopping(patience=40, restore_best_weights=True)
 
 history = model.fit(datagen.flow(X_train, y_train_one_hot, batch_size=64),
 steps_per_epoch=len(X_train) // 64, 
@@ -186,7 +186,7 @@ verbose=1,
 validation_data=(datagen.standardize(X_test.astype(np.float32)), y_test_one_hot),
 class_weight=class_weight,
 shuffle=True,
-# callbacks=[early_stopping],
+callbacks=[early_stopping],
 )
 
 #%% evaluate model
@@ -231,18 +231,10 @@ print(f'Trained model saved here: {model_path}')
 # model = keras.models.load_model('/content/drive/MyDrive/smart_micro/smart_micro/prophase_classifier_5_10.hdf5', custom_objects={'f1_metric':f1_metric})
 np.savez(os.path.join(save_dir, model_name) + '_data', X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test)
 
-#%% create tiff zips
-# import matplotlib
-
-# for stage in np.unique(y):
-#     dat = X[y==stage]
-#     for count, i in enumerate(dat.squeeze()):
-#       matplotlib.image.imsave(f'{stage}/{count}.tiff', i, cmap='gray')
-
 #%% confusion matrix
 preds = model.predict(datagen.standardize(X_test.astype(np.float32)))
 results = np.array([label[i] for i in np.argmax(preds, axis=1)])
-
+""
 disp = ConfusionMatrixDisplay(confusion_matrix(y_test, results), display_labels=label)
 disp.plot(xticks_rotation='vertical')
 
@@ -259,21 +251,21 @@ for i in range(len(label)):
     fpr[i], tpr[i], _ = roc_curve(y_test_one_hot[:, i], preds[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
 
-# # LOG LOG
-# # plt.plot(fpr[int(col)], tpr[int(col)])
-# plt.plot(np.log(fpr[int(col)]), np.log(tpr[int(col)]))
-# plt.title('log-log ROC Prophase, AUC = '+str(roc_auc[int(col)].round(3)))
-# plt.xlabel('log(False Positive Rate)')
-# plt.ylabel('log(True Positive Rate)')
-# # plt.ylim([-.72, 0.05])
-# # plt.xlim([-6.5,0.1])
-# # plt.savefig('log_roc_pro.pdf', dpi=300, bbox_inches="tight")
-
-# REG
-plt.plot((fpr[int(col)]), (tpr[int(col)]))
-plt.title('ROC Prophase, AUC = '+str(roc_auc[int(col)].round(3)))
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
+# LOG LOG
+# plt.plot(fpr[int(col)], tpr[int(col)])
+plt.plot(np.log(fpr[int(col)]), np.log(tpr[int(col)]))
+plt.title('log-log ROC Prophase, AUC = '+str(roc_auc[int(col)].round(3)))
+plt.xlabel('log(False Positive Rate)')
+plt.ylabel('log(True Positive Rate)')
 # plt.ylim([-.72, 0.05])
 # plt.xlim([-6.5,0.1])
-plt.savefig('roc_pro.pdf', dpi=300, bbox_inches="tight")
+# # plt.savefig('log_roc_pro.pdf', dpi=300, bbox_inches="tight")
+
+# # REG
+# plt.plot((fpr[int(col)]), (tpr[int(col)]))
+# plt.title('ROC Prophase, AUC = '+str(roc_auc[int(col)].round(3)))
+# plt.xlabel('False Positive Rate')
+# plt.ylabel('True Positive Rate')
+# # plt.ylim([-.72, 0.05])
+# # plt.xlim([-6.5,0.1])
+# # plt.savefig('roc_pro.pdf', dpi=300, bbox_inches="tight")

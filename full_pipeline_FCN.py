@@ -115,6 +115,31 @@ def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
     # read in image
     raw = io.imread(files).astype(float)
     
+    '''
+    WIP, convert stack to stitched image
+    # stitch function
+    def create_stitch(folder, overlap, im_shape, im_per_ax, dtype):
+
+        # init stitch array with correct dtype
+        stitch = np.zeros([im_per_ax*ax for ax in im_shape], dtype=dtype)
+        for row in range(im_per_ax):
+            for col in range(im_per_ax):
+                im = plt.imread(folder+'/Scan_Iter_000'+str(row)+'_000'+str(col)+'.tif')
+                # must flip horizontally to read image properly
+                im = im[:,::-1]
+                
+                row_start = row*(im_shape[0]-overlap)
+                row_end = row_start+im_shape[0]
+        
+                col_start = col*(im_shape[1]-overlap)
+                col_end = col_start+im_shape[1]
+        
+                stitch[row_start:row_end, col_start:col_end] = im
+            
+        # return trimmed stitch
+        return stitch[0:row_end,0:col_end]
+    '''
+    
     # add extra dimension if not tif stack
     if raw.ndim == 2:
         individual = True
@@ -215,7 +240,8 @@ def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
                 ax = fig.add_subplot(n,n,count)
                 ax.set_title(f'{os.path.basename(files)} {idx}')
                 ax.axis('off')
-                ax.imshow(im.squeeze(), cmap='gray')
+                ax.imshow(im.squeeze(), cmap='gray',
+                          vmin=np.percentile(im,1), vmax=np.percentile(im,99))
                 ax.scatter(float(cx),float(cy), c='r', marker='*')
                 count += 1
             # pause to show image while pipeline runs
