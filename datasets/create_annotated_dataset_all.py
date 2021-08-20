@@ -7,7 +7,7 @@ Created on Wed Feb 17 15:56:52 2021
 """
 
 #%% imports
-import os,glob
+import os,glob,datetime
 import numpy as np
 from scipy import ndimage
 
@@ -88,7 +88,7 @@ y = np.array(y)
 print(X.shape)
 print(y.shape)
 
-np.savez('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/annotated_fov286_0819.npz', X=X, y=y)
+# np.savez(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/annotated_fov286_{datetime.datetime.now().strftime("%m%d")}.npz', X=X, y=y)
 
 #%%
 from collections import Counter

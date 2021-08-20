@@ -108,7 +108,7 @@ print(X_all.shape, y_all.shape)
 print(np.unique(y_all))
 
 #%% save
-# np.savez('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_0819.npz', X=X_all, y=y_all)
+# np.savez(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_{datetime.datetime.now().strftime("%m%d")}.npz', X=X_all, y=y_all)
 
 # save_dir = f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/{datetime.date.today()}'
 # if not os.path.isdir(save_dir):
