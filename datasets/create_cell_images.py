@@ -21,7 +21,7 @@ import numpy as np
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 
-base_folder = '/home/nel/Desktop/cell data andrea'
+base_folder = '/home/nel/Desktop/cell data'
 
 # stages = np.unique(y)
 # stages = ['TBD','anaphase','early_prophase','metaphase','other','prometaphase','prophase','telophase']
@@ -45,7 +45,7 @@ for stage in stages:
     
     # save data
     for count, i in enumerate(dat.squeeze()):
-        matplotlib.image.imsave(os.path.join(base_folder, 'tif', stage, f'{count}.tiff'), i, cmap='gray')
-        matplotlib.image.imsave(os.path.join(base_folder, 'pdf', stage, f'{count}.pdf'), i, cmap='gray')
+        matplotlib.image.imsave(os.path.join(base_folder, 'tif', stage, f'{count}.tiff'), i, cmap='gray', dpi=300)
+        matplotlib.image.imsave(os.path.join(base_folder, 'pdf', stage, f'{count}.pdf'), i, cmap='gray', dpi=300)
         if count == 49:
             break

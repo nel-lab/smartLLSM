@@ -15,22 +15,52 @@ from scipy import ndimage
 path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
 all_files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
 
-random.shuffle(all_files)
+# random.shuffle(all_files)
 
-split = int(.7*len(all_files))
-files = all_files[:split]
-test_files = all_files[split:]
-no_tiles = len(files)
+# split = int(.7*len(all_files))
+# files = all_files[:split]
+# test_files = all_files[split:]
+# no_tiles = len(files)
+
+#%% split Position folders into train and test
+data_1 = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results/data_1_cellpose'
+data_2 = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results/data_2_cellpose'
+
+data_1_folders = os.listdir(data_1)
+data_2_folders = os.listdir(data_2)
+
+d1 = [os.path.join(data_1, i) for i in data_1_folders]
+d2 = [os.path.join(data_2, i) for i in data_2_folders]
+
+position_folders = d1+d2
+
+# randomize
+random.shuffle(position_folders)
+
+train_files = []
+test_files = []
+
+i = 0
+while len(train_files) <= int(.7*len(all_files)):
+    files = glob.glob(os.path.join(position_folders[i], '*.npz'))
+    train_files += files
+    i += 1
+
+for folder in position_folders[i:]:
+    files = glob.glob(os.path.join(folder, '*.npz'))
+    test_files += files
+
+
+no_tiles = len(train_files)
 
 #%%
-# bounding box square 192 pixels long centered at 150
 bb_size = 200
 half_size = bb_size//2
 
 X = []
 y = []
 count = 0
-for file in files:
+for file in train_files:
     dat = np.load(file, allow_pickle=True)
 
     raw = dat['raw']
@@ -108,20 +138,16 @@ print(X_all.shape, y_all.shape)
 print(np.unique(y_all))
 
 #%% save
-# np.savez(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_{datetime.datetime.now().strftime("%m%d")}.npz', X=X_all, y=y_all)
-
-# save_dir = f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/{datetime.date.today()}'
-# if not os.path.isdir(save_dir):
-#     os.makedirs(save_dir)
-# np.save(os.path.join(save_dir, 'test_files'), test_files)
+np.savez(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_{datetime.datetime.now().strftime("%m%d")}.npz', X=X_all, y=y_all)
+np.save(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/FCN_test_files_{datetime.datetime.now().strftime("%m%d")}', test_files)
 
 #%%
 from collections import Counter
  
-stages_dict = dict(Counter(y))
+stages_dict = dict(Counter(y_all))
 stages_dict = dict(sorted(stages_dict.items(), key = lambda item: item[1], reverse = True))
 
-no_cells = len(y)
+no_cells = len(y_all)
 
 print(f'RESULTS OF {no_tiles} TILES:\n')
 for k,v in stages_dict.items():

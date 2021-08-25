@@ -234,7 +234,7 @@ np.savez(os.path.join(save_dir, model_name) + '_data', X_train=X_train, y_train=
 #%% confusion matrix
 preds = model.predict(datagen.standardize(X_test.astype(np.float32)))
 results = np.array([label[i] for i in np.argmax(preds, axis=1)])
-""
+
 disp = ConfusionMatrixDisplay(confusion_matrix(y_test, results), display_labels=label)
 disp.plot(xticks_rotation='vertical')
 

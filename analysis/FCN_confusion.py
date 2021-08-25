@@ -16,7 +16,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message abou
 
 #%% load model
 
-nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-20/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
+nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-24/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
 label = nn_path.split('.')[-2].split('/')[-1].split('_')
 
 def get_conv(input_shape=(200, 200, 1), filename=None):
@@ -56,7 +56,11 @@ def get_conv(input_shape=(200, 200, 1), filename=None):
 heatmodel = get_conv(input_shape=(None, None, 1), filename=nn_path)
 
 #%% load test annotation results
-files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-20/test_files.npy'))
+files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/FCN_test_files_0824.npy'))
+
+#%% all annotated files
+path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
+files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
 
 #%% loop
 train_shape = 200
@@ -66,6 +70,7 @@ pro_col = label.index('prophase')
 gt_pro = []
 FCN_max = []
 center_dist = []
+reg_dists = []
 
 for count, file in enumerate(files):
     
@@ -112,7 +117,7 @@ for count, file in enumerate(files):
         center_dist.append(np.inf)
         continue
 
-    # motion correction
+    # exponential interpolation
     ms_h = 0
     ms_w = 0
     
@@ -141,6 +146,8 @@ for count, file in enumerate(files):
     
     # calc gt prophase centroid(s)
     dists = []
+    reg_dist = []
+    corr_dist = []
     for mask_id in pro_id:
 
         # get moments for cell to calculate center of mass
@@ -155,8 +162,19 @@ for count, file in enumerate(files):
         dist = np.linalg.norm([cX-FCN_x, cY-FCN_y])
         dists.append(dist)
         
+        reg_d = np.linalg.norm([cX-factor*sh_y, cY-factor*sh_x])
+        reg_dist.append(reg_d)
+        
     # keep shorter distance
     center_dist.append(min(dists))
+    reg_dists.append(min(reg_dist))
+
+#%% dist
+reg = np.array(reg_dists)
+corr = np.array(center_dist)[~np.isinf(center_dist)]
+plt.hist(reg, bins = 70, range = (0,100), label = f'regular, mean={reg.mean().round(1)}')
+plt.hist(corr, bins = 70, range = (0,100), label = f'corrected, mean={corr.mean().round(1)}')
+plt.legend()
 
 #%% arrays
 gt_pro = np.array(gt_pro)
@@ -195,11 +213,16 @@ for pro_thresh in np.linspace(0,1,1001):
                 fn += 1
                 
     print('thresh:', pro_thresh)
-    print('tp:', tp)
-    print('tn:', tn)
-    print('fp:', fp)
-    print('fn:', fn)
+    # print('tp:', tp)
+    # print('tn:', tn)
+    # print('fp:', fp)
+    # print('fn:', fn)
     # print('OOR:', oor)
+    print(fp/(fp+tn), tp/(tp+fn))
+    
+    # if fp/(fp+tn) < 10**-3:
+    #     print(pro_thresh)
+    #     break
     
     TPR_all.append(tp/(tp+fn))
     FPR_all.append(fp/(fp+tn))
@@ -216,11 +239,11 @@ print('     -',fn,tn)
 # plt.ylim([0,1])
 # plt.plot([0,1],[0,1], ls='--', c='k')
 plt.plot(np.log(FPR_all), np.log(TPR_all))
-plt.xlim([-6.5, .1])
-plt.ylim([-.78, .03])
+# plt.xlim([-6.5, .1])
+# plt.ylim([-.78, .03])
 plt.xlabel('FPR')
 plt.ylabel('TPR')
-plt.title(f'ROC, AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
+plt.title(f'Prophase ROC, AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
 
 #%% raw tif files
 path = '/home/nel/Desktop/Smart Micro/ShannonEntropy_2Dimgs'
@@ -235,14 +258,14 @@ plt.close('all')
 train_shape = 200
 half_shape = train_shape//2
 pro_col = label.index('prophase')
-pro_thresh = 0.7
+pro_thresh = 0.99
 
 # plot bool
 plot = True
 
 # init number of files to run/break on
 completed = 0
-num_to_break = 10
+num_to_break = 15
 
 for count, file in enumerate(files):
     is_bord=False
@@ -294,7 +317,7 @@ for count, file in enumerate(files):
     else:
         continue
         
-    # motion correction
+    # exponential interpolation
     ms_h = 0#np.ceil(pro.shape[0]/2)
     ms_w = 0#np.ceil(pro.shape[0]/2)
   
@@ -338,14 +361,14 @@ for count, file in enumerate(files):
         fig = plt.figure()
         
         # plot raw
-        ax = fig.add_subplot(1,1+len(label),1)
-        ax.imshow(raw.squeeze(),cmap='gray')
+        ax = fig.add_subplot(4,3,1)
+        ax.imshow(raw.squeeze(),cmap='gray',vmin=np.percentile(raw,1),vmax=np.percentile(raw,99))
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_title('original')
-        ax.scatter(factor*sh_y_n, factor*sh_x_n, c='b', label='MC')
+        ax.set_title('original:'+str(pro.max()))
+        ax.scatter(factor*sh_y_n, factor*sh_x_n, c='b', label='EI')
         ax.scatter(factor*sh_y, factor*sh_x, c='r', label='OG')
-        # ax.legend()
+        ax.legend()
         
         # add rectangle for viz
         from matplotlib.patches import Rectangle
@@ -355,15 +378,16 @@ for count, file in enumerate(files):
         # plot heatmaps
         res = tf.transpose(res, perm=[2, 0, 1]).numpy()
         for num, i in enumerate(res.squeeze()):
-          ax = fig.add_subplot(1,1+len(label),2+num)
+          ax = fig.add_subplot(4,3,2+num)
           ax.imshow(i, cmap='gray')
+          
           ax.set_xticks([])
           ax.set_yticks([])
-          ax.set_title(label[num]+' heatmap')
+          ax.set_title(label[num]+' heatmap:'+str(i[np.unravel_index(np.argmax(pro), i.shape)]))
           if num == pro_col:
-            ax.scatter(sh_y_n, sh_x_n, c='b', label='MC')
+            ax.scatter(sh_y_n, sh_x_n, c='b', label='EI')
             ax.scatter(sh_y, sh_x, c='r', label='OG')
-            # ax.legend()
+            ax.legend()
     
     # break if enough files have been run
     completed += 1

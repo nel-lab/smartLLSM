@@ -20,14 +20,11 @@ print('-----------------------------------------------')
 
 #%% user setup
 
-file = '/home/nel/Desktop/FCN_pipe_test/Image_stack.tif'
-
-# user input
 stage_of_interest = 'prophase'
 thresh = 0.7
 
 folder_to_watch = '/home/nel/Desktop/Smart Micro/full_pipeline_FCN_test/watch folder'
-nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-19/blank_blurry_edge_interphase_prophase_unique.h5'
+nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-24/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
 
 # number of files to analyze at a time
 '''
@@ -37,8 +34,12 @@ BATCH_SIZE = 1
 # delay in seconds between checking folder
 delay = 5
 
+# stitch stack
+stitch = False
+overlap = 255
+
 # visualize results
-visualize_results = True
+visualize_results = False
 
 # order cells by score to set thresh
 set_thresh = False
@@ -109,36 +110,23 @@ else:
     thresh_folder=False
     
 #%% pipeline
+
+read_times = []
+preprocess_times = []
+network_times = []
+
 def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
+                 stitch = False, overlap = 255,
                  viz=False, thresh_folder=False, set_thresh_thresh=0.2):
+    
+    read_start = time.time()
     
     # read in image
     raw = io.imread(files).astype(float)
     
-    '''
-    WIP, convert stack to stitched image
-    # stitch function
-    def create_stitch(folder, overlap, im_shape, im_per_ax, dtype):
-
-        # init stitch array with correct dtype
-        stitch = np.zeros([im_per_ax*ax for ax in im_shape], dtype=dtype)
-        for row in range(im_per_ax):
-            for col in range(im_per_ax):
-                im = plt.imread(folder+'/Scan_Iter_000'+str(row)+'_000'+str(col)+'.tif')
-                # must flip horizontally to read image properly
-                im = im[:,::-1]
-                
-                row_start = row*(im_shape[0]-overlap)
-                row_end = row_start+im_shape[0]
-        
-                col_start = col*(im_shape[1]-overlap)
-                col_end = col_start+im_shape[1]
-        
-                stitch[row_start:row_end, col_start:col_end] = im
-            
-        # return trimmed stitch
-        return stitch[0:row_end,0:col_end]
-    '''
+    read_times.append(time.time()-read_start)
+    
+    preprocess_start = time.time()
     
     # add extra dimension if not tif stack
     if raw.ndim == 2:
@@ -146,6 +134,37 @@ def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
         raw = raw[np.newaxis,...]
     else:
         individual = False
+        
+        # convert stack to stitch 
+        if stitch:
+            individual = True
+            
+            im_per_ax = int(np.sqrt(raw.shape[0]))
+            
+            # init stitch array with correct dtype
+            stitched_im = np.zeros([im_per_ax*ax for ax in raw.shape[1:]])   
+        
+            idx = 0
+            for row in range(im_per_ax):
+                for col in range(im_per_ax):
+        
+                    # must flip horizontally to read image properly
+                    im = raw[idx][:,::-1]
+                    
+                    row_start = row*(im.shape[0]-overlap)
+                    row_end = row_start+im.shape[0]
+        
+                    col_start = col*(im.shape[1]-overlap)
+                    col_end = col_start+im.shape[1]
+        
+                    stitched_im[row_start:row_end, col_start:col_end] = im
+                    
+                    idx += 1
+                    
+            raw = stitched_im[0:row_end,0:col_end]
+            
+            # add extra dimension
+            raw = raw[np.newaxis,...]
     
     # preprocess raw image
     raw_bigger = np.zeros([raw.shape[0], raw.shape[1]+2*half_size, raw.shape[2]+2*half_size], dtype=float)
@@ -157,9 +176,15 @@ def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
     
     raw_bigger = raw_bigger[...,np.newaxis]
     
+    preprocess_times.append(time.time()-preprocess_start)
+    
+    netowrk_start = time.time()
+    
     # forward pass
     res = nn_model.predict(raw_bigger)
     
+    network_times.append(time.time() - netowrk_start)
+        
     # isolate interest heatmap
     interest = res[:,:,:,filter_col]
     
@@ -199,7 +224,7 @@ def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
         
         # store center
         cell_centroid_mask[i] = (factor*sh_y_n, factor*sh_x_n)
-    
+            
     # store data
     file_name_mask = np.array([os.path.basename(files) for _ in range(sum(mask))])
     if individual:
@@ -226,16 +251,22 @@ def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
         with open(results_csv, 'a') as f:
             writer = csv.writer(f)
             writer.writerows(all_info)
-        
+                
         # view results
         if viz:
             n = int(np.ceil(np.sqrt(len(file_name_mask))))
             fig = plt.figure()
             count = 1
             for (_, idx, cx, cy, _) in all_info:
-                im = io.imread(files)
-                if idx:
-                    im = im[int(idx)]
+                '''
+                WIP, need to update if multiple files passed in
+                '''
+                if stitch:
+                    im = raw
+                else:
+                    im = io.imread(files)
+                    if idx:
+                        im = im[int(idx)]
                 
                 ax = fig.add_subplot(n,n,count)
                 ax.set_title(f'{os.path.basename(files)} {idx}')
@@ -259,30 +290,51 @@ def run_pipeline(files, nn_model, half_size, filter_col, thresh, results_csv,
     
 #%% watch folder
 start_loop_time = time.time()
-        
+
+times = []
+
 while True:
     # look for files
     files_all = sorted(glob.glob(os.path.join(folder_to_watch,'**','*.tif'), recursive=True))
     files_all = [file for file in files_all if not 'completed' in file]
     
     # files_analyzed = files_all[:BATCH_SIZE]
-    # files_analyzed = files_all[0]
     
     # if len(files_all) >= BATCH_SIZE:
     if files_all:
         files_analyzed = files_all[0]
-        print('----------------------------')
+        # print('----------------------------')
         start = time.time()
         cell_found = run_pipeline(files_analyzed, nn_model, half_size, filter_col, thresh, results_csv,
+                                  stitch=stitch, overlap=overlap,
                                   viz=visualize_results, thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
         
-        print(f'cell found: {cell_found}')
-        print(f'pipeline time: {time.time()-start}')
-        print('----------------------------')
+        times.append(time.time()-start)
+        if len(times)>=5:
+            raise ValueError
+        
+        # print(f'cell found: {cell_found}')
+        # print(f'pipeline time: {time.time()-start}')
+        # print('----------------------------')
         
         # move files to completed folder
-        os.replace(files_analyzed, os.path.join(finished_folder, os.path.basename(files_analyzed)))
+        # os.replace(files_analyzed, os.path.join(finished_folder, os.path.basename(files_analyzed)))
               
     else:
         print(f'waiting for files...{len(files_all)} file(s)  time: {time.time()-start_loop_time}', end='\r') #end='\r' will prevent generating a new line and will overwrite this line over and over
         time.sleep(delay)
+        
+#%% timing
+mt = []
+for t in times, read_times, preprocess_times, network_times:
+    mt.append(np.array(t).mean())
+    
+rt, pt, nt = mt[1], mt[2], mt[3]
+plt.barh(0,rt+pt+nt, label=f'forward pass ({nt.round(3)} s)', color='C2')
+plt.barh(0,rt+pt, label=f'preprocess ({pt.round(3)} s)', color='C1')
+plt.barh(0,rt, label=f'read image ({rt.round(3)} s)', color='C0')
+plt.legend()
+plt.xlabel('Time (s)')
+plt.xlim([0, rt+pt+nt])
+plt.yticks([])
+plt.title(f'FCN Pipeline Time for 1 TIF Stack (100 tiles)\nTotal Pipeline = {(rt+pt+nt).round(3)} s')
