@@ -16,7 +16,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message abou
 
 #%% load model
 
-nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-24/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
+nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-25/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
 label = nn_path.split('.')[-2].split('/')[-1].split('_')
 
 def get_conv(input_shape=(200, 200, 1), filename=None):
@@ -55,12 +55,15 @@ def get_conv(input_shape=(200, 200, 1), filename=None):
 
 heatmodel = get_conv(input_shape=(None, None, 1), filename=nn_path)
 
+# generate viz of model architecture
+# tf.keras.utils.plot_model(heatmodel, show_shapes=True, show_layer_names=False, rankdir='TB')
+
 #%% load test annotation results
 files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/FCN_test_files_0824.npy'))
 
-#%% all annotated files
-path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
-files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
+#%% all annotated files - for dist hist
+# path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
+# files = sorted(glob.glob(os.path.join(path,'**','*.npz'), recursive=True))
 
 #%% loop
 train_shape = 200
@@ -169,7 +172,7 @@ for count, file in enumerate(files):
     center_dist.append(min(dists))
     reg_dists.append(min(reg_dist))
 
-#%% dist
+#%% dist hist
 reg = np.array(reg_dists)
 corr = np.array(center_dist)[~np.isinf(center_dist)]
 plt.hist(reg, bins = 70, range = (0,100), label = f'regular, mean={reg.mean().round(1)}')

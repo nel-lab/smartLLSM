@@ -208,12 +208,12 @@ metrics=['accuracy',f1_metric])
 
 early_stopping = tf.keras.callbacks.EarlyStopping(patience=10, restore_best_weights=True)
 
-log_dir = f'/home/nel/Desktop/{datetime.datetime.now().strftime("%m%d_%H%M")}'
+log_dir = f'/home/nel/Desktop/tensorboard/{datetime.datetime.now().strftime("%m%d_%H%M")}'
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir)
 
 history = model.fit(datagen.flow(X_train, y_train_one_hot, batch_size=64),
 steps_per_epoch=len(X_train) // 64, 
-epochs=50,
+epochs=100,
 verbose=1,
 validation_data=(np.array([datagen.standardize(i) for i in X_test.astype(float)]), y_test_one_hot),
 class_weight=class_weight,
@@ -281,8 +281,8 @@ plt.ylabel('log(True Positive Rate)')
 # plt.title('ROC Prophase, AUC = '+str(roc_auc[int(col)].round(3)))
 # plt.xlabel('False Positive Rate')
 # plt.ylabel('True Positive Rate')
-# plt.ylim([-.72, 0.05])
-# plt.xlim([-6.5,0.1])
+# # plt.ylim([-.72, 0.05])
+# # plt.xlim([-6.5,0.1])
 # # plt.savefig('roc_pro.pdf', dpi=300, bbox_inches="tight")
 
 #%% save model/data
