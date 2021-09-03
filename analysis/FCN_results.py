@@ -16,13 +16,14 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message abou
 
 #%% load model
 
-nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/2021-08-25/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
+nn_path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/FCN_models/0901_1234/anaphase_blank_blurry_edge_interphase_metaphase_prometaphase_prophase_telophase.h5'
 label = nn_path.split('.')[-2].split('/')[-1].split('_')
 
 def get_conv(input_shape=(200, 200, 1), filename=None):
 
     model = tf.keras.models.Sequential([
-    tf.keras.layers.Conv2D(16, (3,3), activation='relu', padding='same', input_shape=input_shape), #(None, None, 1)),#X_train.shape[1:])),
+    tf.keras.layers.LayerNormalization(axis=(1,2), trainable=False, scale=False, center=False, input_shape=input_shape),   
+    tf.keras.layers.Conv2D(16, (3,3), activation='relu', padding='same'),# input_shape=input_shape), #(None, None, 1)),#X_train.shape[1:])),
     tf.keras.layers.MaxPooling2D(2, 2),
 
     tf.keras.layers.Conv2D(32, (3,3), activation='relu', padding='same'),
@@ -39,7 +40,7 @@ def get_conv(input_shape=(200, 200, 1), filename=None):
 
     tf.keras.layers.Conv2D(64, kernel_size=6, activation='relu'),
     tf.keras.layers.Dropout(0.5),
-    tf.keras.layers.BatchNormalization(),
+    # tf.keras.layers.BatchNormalization(),
 
     tf.keras.layers.Conv2D(len(label), kernel_size=1, activation='softmax'),
     # tf.keras.layers.Conv2D(len(np.unique(y_train)), kernel_size=1),
@@ -57,9 +58,9 @@ heatmodel = get_conv(input_shape=(None, None, 1), filename=nn_path)
 
 # generate viz of model architecture
 # tf.keras.utils.plot_model(heatmodel, show_shapes=True, show_layer_names=False, rankdir='TB')
-
+    
 #%% load test annotation results
-files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/YOLO_test_files_0825.npy'))
+files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/YOLO_test_files_0830.npy'))
 
 #%% all annotated files - for dist hist
 # path = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/annotation_results'
@@ -74,7 +75,7 @@ yolo_classes = ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase',
 # store auc value for all classes to calculate mean
 AUC = []
 
-for test_class in yolo_classes:
+for test_class in ['prophase']:#yolo_classes:
     print(test_class)
 
     # model output index for specific class
@@ -106,9 +107,9 @@ for test_class in yolo_classes:
         gt_pro.append(len(pro_id))
         
         # preprocess raw image
-        raw_FCN = raw - raw.mean()
-        raw_FCN /= raw.std()
-        raw_FCN = raw_FCN[np.newaxis,...,np.newaxis]
+        # raw_FCN = raw - raw.mean()
+        # raw_FCN /= raw.std()
+        raw_FCN = raw[np.newaxis,...,np.newaxis]
         
         # add border
         raw_FCN_bigger = cv2.copyMakeBorder(raw_FCN.squeeze(), half_shape, half_shape, half_shape, half_shape, 0)
@@ -214,7 +215,7 @@ for test_class in yolo_classes:
     # recall_all = []
     
     # increase threshold value between 0 and 1
-    for pro_thresh in np.linspace(0,1,1001):#[.999]:
+    for pro_thresh in (np.logspace(0,np.log10(2),1000)-1):#np.linspace(0,1,1001):#[.999]:
         
         # FCN_pro turns FCN_max into boolean if cell in tile is above threshold
         FCN_pro = FCN_max > pro_thresh
@@ -287,7 +288,7 @@ for test_class in yolo_classes:
     # print('     -',fn,tn)  
      
     ##%% plot ROC curve for class
-    plt.plot((FPR_all), (TPR_all), label=f'{test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
+    plt.plot((FPR_all), (TPR_all), label=f'FCN {test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
     # plt.plot(np.log(FPR_all), np.log(TPR_all), label=f'{test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
     
     # append AUC score for class
@@ -297,18 +298,18 @@ for test_class in yolo_classes:
 plt.xlim([0,1])
 plt.ylim([0,1])
 plt.plot([0,1],[0,1], ls='--', c='k')
-# # plt.xlim([-6.5, .1])
-# # plt.ylim([-.78, .03])
+# plt.xlim([-6.5, .1])
+# plt.ylim([-.78, .03])
 plt.xlabel('FPR')
 plt.ylabel('TPR')
 plt.legend()
 # plt.title(f'Prophase ROC, AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
-plt.title(f'ROC Curve, Mean AUC = {np.mean(AUC).round(3)}')
+# plt.title(f'ROC Curve, Mean AUC = {np.mean(AUC).round(3)}')
 
 #%% raw tif files
-path = '/home/nel/Desktop/Smart Micro/ShannonEntropy_2Dimgs'
-files = sorted(glob.glob(os.path.join(path, '**','*.tif'), recursive=True))
-files = [fil for fil in files if not 'annotated_examples' in fil]
+# path = '/home/nel/Desktop/Smart Micro/ShannonEntropy_2Dimgs/data_3'
+# files = sorted(glob.glob(os.path.join(path, '**','*.tif'), recursive=True))
+# files = [fil for fil in files if not 'annotated_examples' in fil]
 
 #%% visualize results
 # clear results on run
@@ -322,7 +323,6 @@ pro_thresh = 0.99
 
 # plot bool
 plot = True
-
 # init number of files to run/break on
 completed = 0
 num_to_break = 15
@@ -339,15 +339,15 @@ for count, file in enumerate(files):
         raw = dat['raw']
         stages = dat['labels']
         
-    pro_id = np.where(np.array(stages) == 'prophase')[0]+1
+    # pro_id = np.where(np.array(stages) == 'prophase')[0]+1
     
     # start pipeline timing
     start = time.time()
     
     # preprocess raw image
-    raw_FCN = raw - raw.mean()
-    raw_FCN /= raw.std()
-    raw_FCN = raw_FCN[np.newaxis,...,np.newaxis]
+    # raw_FCN = raw - raw.mean()
+    # raw_FCN /= raw.std()
+    raw_FCN = raw[np.newaxis,...,np.newaxis]
 
     # add border
     raw_FCN_bigger = cv2.copyMakeBorder(raw_FCN.squeeze(), half_shape, half_shape, half_shape, half_shape, 0)
@@ -371,8 +371,8 @@ for count, file in enumerate(files):
     # plot if above thresh
     if pro.max()>pro_thresh:
         pass
-    elif len(pro_id) > 0:
-        pass
+    # elif len(pro_id) > 0:
+        # pass
         # print('missed one!', file)
     else:
         continue
@@ -384,7 +384,7 @@ for count, file in enumerate(files):
     top_left = cv2.minMaxLoc(pro)[-1]
     sh_y, sh_x = top_left
   
-    if sh_y == 0 or sh_y == pro.shape[0] or sh_x == 0 or sh_x == pro.shape[0]:
+    if sh_y == 0 or sh_y == pro.shape[0]-1 or sh_x == 0 or sh_x == pro.shape[0]-1:
     # if sh_y == pro.shape[0]-1 or sh_x == pro.shape[0]-1:
       # continue
       sh_y_n = sh_y

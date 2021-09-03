@@ -16,20 +16,30 @@ from sklearn import metrics
 from tkinter import Tcl
 
 #%% load YOLO results
-results = '/home/nel/Software/yolov5/runs/detect/exp15/labels'
+results = '/home/nel/Software/yolov5/runs/detect/exp23/labels'
 results_files = [os.path.join(results, i) for i in os.listdir(results)]
 # sort each file by number to match with test file list
 yolo_files = Tcl().call('lsort', '-dict', results_files)
 yolo_classes = ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']
 
 #%% load test annotation results
-files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/YOLO_test_files_0825.npy'))
+files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/YOLO_test_files_0830.npy'))
 
+#%% if there are missing YOLO result files (empty tile), create blank ones
+if len(yolo_files) != len(files):
+    print('fixing file number mismatch (YOLO did not find any cells in some tiles)')
+    for i in range(len(files)):
+        fname = os.path.join(results, f'{i}.txt')
+        if not os.path.isfile(fname): 
+            print(f'creating {fname}')
+            with open(fname, 'w') as f:
+                pass
+    
 #%% loop through test files
 # store auc value for all classes to calculate mean
 AUC = []
 
-for test_class in yolo_classes:
+for test_class in ['prophase']:#yolo_classes:
 
     print(test_class)
     
@@ -52,6 +62,7 @@ for test_class in yolo_classes:
             mask = dat['masks']
             stages = dat['labels']
         
+        
         # find number of gt prophase cells
         pro_id = np.where(np.array(stages) == test_class)[0]+1
         gt_pro.append(len(pro_id))
@@ -62,12 +73,18 @@ for test_class in yolo_classes:
         '''
         res = np.loadtxt(yolo_file)
         
-        # add dimension if only one cell found
+        # add dimension if only one cell found (or if no cells found at all)
         if res.ndim == 1:
             res = res[None,:]
         
-        # convert YOLO prediction (integer) into class stage ('anaphase', 'prophase', etc)
-        classes = np.array([yolo_classes[int(i)] for i in res[:,0]])
+        # if no cells found at all, set classes to empty list
+        if res.size == 0:
+            classes=[]
+        
+        # otherwise... 
+        else:        
+            # convert YOLO prediction (integer) into class stage ('anaphase', 'prophase', etc)
+            classes = np.array([yolo_classes[int(i)] for i in res[:,0]])
     
         # if a YOLO result file does not contain a cell we are looking for, set the "maximum score" to negative infinity
         # ... and the x/y coordinates to infinity (so distance is also infinity)
@@ -132,7 +149,7 @@ for test_class in yolo_classes:
     # recall_all = []
     
     # increase threshold value between 0 and 1
-    for pro_thresh in np.linspace(0,1,101):
+    for pro_thresh in (np.logspace(0,np.log10(2),1000)-1):#np.linspace(0,1,1001):
             
         # YOLO_pro turns YOLO_max into boolean if cell in tile is above threshold
         YOLO_pro = YOLO_max > pro_thresh
@@ -194,7 +211,7 @@ for test_class in yolo_classes:
         # append results across all threshold values        
         TPR_all.append(tp/(tp+fn))
         FPR_all.append(fp/(fp+tn))
-        
+
         # precision_all.append(tp/(tp+fp))
         # recall_all.append(tp/(tp+fn))
         
@@ -205,8 +222,8 @@ for test_class in yolo_classes:
     # print('     -',fn,tn)  
      
     ##%% plot ROC curve for class
-    plt.plot(np.log(FPR_all), np.log(TPR_all), label=f'{test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
-    # plt.plot(np.log(FPR_all), np.log(TPR_all), label = test_class)
+    plt.plot((FPR_all), (TPR_all), label=f'YOLO (thresh = 0.25) {test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}', alpha = 0.5)
+    # plt.plot(np.log(FPR_all), np.log(TPR_all), label=f'{test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
     
     # append AUC score for class
     AUC.append(metrics.auc(FPR_all, TPR_all))
@@ -221,4 +238,4 @@ plt.xlabel('FPR')
 plt.ylabel('TPR')
 plt.legend()
 # plt.title(f'Prophase ROC, AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
-plt.title(f'ROC Curve, Mean AUC = {np.mean(AUC).round(3)}')
+# plt.title(f'ROC Curve, Mean AUC = {np.mean(AUC).round(3)}')

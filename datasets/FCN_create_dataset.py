@@ -50,10 +50,11 @@ for folder in position_folders[i:]:
     files = glob.glob(os.path.join(folder, '*.npz'))
     test_files += files
 
-
-no_tiles = len(train_files)
+#%% load YOLO train files
+train_files = list(np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/YOLO_train_files_0830.npy'))
 
 #%%
+no_tiles = len(train_files)
 bb_size = 200
 half_size = bb_size//2
 
@@ -125,8 +126,13 @@ y = np.array(y)
 print(X.shape)
 print(y.shape)
 
+#%% load in old data to combine with blanks
+file = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_0831.npz'
+dat = np.load(file)
+X,y = dat['X'], dat['y']
+
 #%% combine with blank cells
-blanks = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/blanks_fov200_0817.npz'
+blanks = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/blanks_fov200_0831.npz'
 
 data_blanks = np.load(blanks)
 X_blanks, y_blanks = data_blanks['X'], data_blanks['y']
@@ -139,7 +145,7 @@ print(np.unique(y_all))
 
 #%% save
 np.savez(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/all_fov200_{datetime.datetime.now().strftime("%m%d")}.npz', X=X_all, y=y_all)
-np.save(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/FCN_test_files_{datetime.datetime.now().strftime("%m%d")}', test_files)
+# np.save(f'/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/FCN_test_files_{datetime.datetime.now().strftime("%m%d")}', test_files)
 
 #%%
 from collections import Counter

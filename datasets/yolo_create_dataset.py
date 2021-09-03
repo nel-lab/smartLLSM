@@ -54,7 +54,7 @@ start = time.time()
 
 bb_size = 200
 
-base_folder = '/home/nel/Software/yolov5/smart_micro_datasets'
+base_folder = '/home/nel/Software/yolov5/smart_micro_datasetsv2'
 
 for mode in ['train', 'test']:
     
