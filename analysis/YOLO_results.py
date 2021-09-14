@@ -16,7 +16,7 @@ from sklearn import metrics
 from tkinter import Tcl
 
 #%% load YOLO results
-results = '/home/nel/Software/yolov5/runs/detect/exp23/labels'
+results = '/home/nel/Software/yolov5/runs/detect/exp25/labels'
 results_files = [os.path.join(results, i) for i in os.listdir(results)]
 # sort each file by number to match with test file list
 yolo_files = Tcl().call('lsort', '-dict', results_files)
@@ -222,7 +222,7 @@ for test_class in ['prophase']:#yolo_classes:
     # print('     -',fn,tn)  
      
     ##%% plot ROC curve for class
-    plt.plot((FPR_all), (TPR_all), label=f'YOLO (thresh = 0.25) {test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}', alpha = 0.5)
+    plt.plot((FPR_all), (TPR_all), label=f'YOLO5s (thresh = 0.25) {test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}', alpha = 0.5)
     # plt.plot(np.log(FPR_all), np.log(TPR_all), label=f'{test_class}: AUC = {metrics.auc(FPR_all, TPR_all).round(3)}')
     
     # append AUC score for class

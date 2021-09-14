@@ -315,6 +315,8 @@ plt.legend()
 # clear results on run
 plt.close('all')
 
+test_times = []
+
 # model info
 train_shape = 200
 half_shape = train_shape//2
@@ -404,7 +406,10 @@ for count, file in enumerate(files):
     
     # print pipeline time
     print()
-    print('pipeline time:', time.time()-start)
+    p_time = time.time()-start
+    print('pipeline time:', p_time)
+    
+    test_times.append(p_time)
     
     # print centroid info
     if is_bord:
