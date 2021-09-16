@@ -50,3 +50,14 @@ Score threshold for having the microscope go take a high resolution 3D image of:
 # Annotator Install instructions
 
 ```conda create -n sm_annotator tensorflow-estimator=2.0.0 tensorflow-gpu=2.0.0 h5py=2.10.0 spyder opencv scipy```
+
+# YOLO Pipeline install Instructions
+
+```
+conda create -n sm_yolo_pipeline python spyder pandas opencv tqdm matplotlib seaborn scikit-image
+conda activate sm_yolo_pipeline
+```
+Install correct PyTorch version from [here](https://pytorch.org/get-started/locally/), for example:
+```
+conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
+```
