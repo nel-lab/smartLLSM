@@ -24,9 +24,9 @@ import torch
 
 #%% user setup
 stage_of_interest = 'prophase'
-thresh = 0.7
+thresh = 0.0
 
-folder_to_watch = '/home/nel/Desktop/yolo_pipeline/watch folder'
+folder_to_watch = '/home/nel/Desktop/Smart Micro/full_pipeline_yolo_test/watch folder'
 
 # YOLO paths
 path_to_yolo_repo = '/home/nel/Software/yolov5'
@@ -157,9 +157,15 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     
     # merge output df's
     combined_output = pd.concat(output)
-
+    
+    # print total number of cells found
+    print(f'number of cells found = {combined_output.shape[0]}')
+    
     # mask only results from correct stage
     combined_output_stage = combined_output[combined_output.name == stage_of_interest]
+    
+    # print total number of stage_of_interest cells found
+    print(f'number of {stage_of_interest} cells found = {combined_output_stage.shape[0]}')
 
     # mask stage output above thresh
     combined_output_thresh = combined_output_stage[combined_output_stage.confidence >= thresh].copy() # .copy() needed to avoid pandas warning
