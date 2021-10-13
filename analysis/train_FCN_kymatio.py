@@ -17,6 +17,9 @@ from sklearn.model_selection import train_test_split
 import tensorflow as tf
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message about not being optimized...
 
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
 from kymatio.keras import Scattering2D
 
 print('python:', platform.python_version())
@@ -109,77 +112,43 @@ print(Counter(y_train))
 print('weights', class_weight)
 print('classes', label)
 
-#%% add extra dimension to input vectors for model input
-X_train = X_train[..., np.newaxis]
-# X_valid = X_valid[..., np.newaxis]
-X_test = X_test[..., np.newaxis]
-
-#%% add gaussian noise
-def add_noise(img):
-    img = img - img.mean()
-    img /= img.std()
-    noise = np.random.randn(*img.shape)*.15
-    img += noise
-    return img
-
-#%% add image preprocessing
-datagen = tf.keras.preprocessing.image.ImageDataGenerator(
-    featurewise_center=False, samplewise_center=False,
-    featurewise_std_normalization=False, samplewise_std_normalization=False,
-    zca_whitening=False, zca_epsilon=1e-06, rotation_range=360, width_shift_range=0.1,
-    height_shift_range=0.1, brightness_range=[0.1,2.5], shear_range=1, zoom_range=[0.9,1.1],
-    channel_shift_range=0.0, fill_mode='nearest', cval=0.0,
-    horizontal_flip=True, vertical_flip=True, rescale=None,
-    preprocessing_function=add_noise, data_format=None, validation_split=0.0, dtype=None
-)
-# datagen.fit(X_train)
-
-# from skimage.util import montage
-# og = X_train[y_train == 'prophase'][0]
-# a = np.concatenate([datagen.standardize(datagen.random_transform(og))[None,:] for i in range(25)], axis=0)
-# plt.subplot(121); plt.imshow(og, cmap='gray'); plt.axis('off'); plt.title('og')
-# plt.subplot(122); plt.imshow(montage(a.squeeze(), padding_width=10), cmap='gray'); plt.axis('off'); plt.title('preprocessed')
-
 #%% define model
 def get_conv(input_shape=(200, 200), filename=None):
 
     model = tf.keras.models.Sequential([
         
-    tf.keras.layers.Input(input_shape),
-    Scattering2D(J=3),
-        
-    # tf.keras.layers.LayerNormalization(axis=(1,2), trainable=False, scale=False, center=False, input_shape=input_shape),   
-    tf.keras.layers.Conv2D(16, (3,3), activation='relu', padding='same', data_format='channels_first'),# input_shape=input_shape), #(None, None, 1)),#X_train.shape[1:])),
-    tf.keras.layers.MaxPooling2D(2, 2),
-
-    tf.keras.layers.Dropout(0.25),
-    tf.keras.layers.Conv2D(32, (3,3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D(2,2),
-
-    tf.keras.layers.Dropout(0.25),
-    tf.keras.layers.Conv2D(64, (3,3), activation='relu', padding='same'),
-    tf.keras.layers.MaxPooling2D(2,2),
-
-    # tf.keras.layers.Dropout(0.25),
-    # tf.keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    # tf.keras.layers.MaxPooling2D(2,2),
+    tf.keras.layers.LayerNormalization(axis=(1,2), trainable=False, scale=False, center=False, input_shape=input_shape),   
     
-    # tf.keras.layers.Dropout(0.25),
-    # tf.keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
-    # tf.keras.layers.Conv2D(32, (1,1), activation='relu', padding='same'),
-    # tf.keras.layers.MaxPooling2D(2,2),
+    # tf.keras.layers.Input(input_shape),
+    
+    Scattering2D(J=3, L=8),
+    
+    # tf.keras.layers.Conv2D(128, (3,3), activation='relu', padding='same', data_format='channels_first'),
+    # tf.keras.layers.MaxPooling2D(2,2, data_format='channels_first'),
 
-    tf.keras.layers.Conv2D(64, kernel_size=6, activation='relu'),
-    tf.keras.layers.Dropout(0.25),
+    # tf.keras.layers.Dropout(0.25),
+    # tf.keras.layers.Conv2D(64, (3,3), activation='relu', padding='same', data_format='channels_first'),
+    # tf.keras.layers.MaxPooling2D(2,2, data_format='channels_first'),
+
+    # tf.keras.layers.Dropout(0.25),
+    tf.keras.layers.Conv2D(32, (3,3), activation='relu', padding='same', data_format='channels_first'),
+    tf.keras.layers.MaxPooling2D(2,2, data_format='channels_first'),
+
+    # tf.keras.layers.Dropout(0.25),
+    # tf.keras.layers.Conv2D(16, (3,3), activation='relu', padding='same', data_format='channels_first'),
+    # tf.keras.layers.MaxPooling2D(2,2, data_format='channels_first'),
+
+    # tf.keras.layers.Conv2D(64, kernel_size=6, activation='relu'),
+    # tf.keras.layers.Dropout(0.25),
     # tf.keras.layers.BatchNormalization(),
 
-    tf.keras.layers.Conv2D(len(np.unique(y_train)), kernel_size=1, activation='softmax'),
+    tf.keras.layers.Conv2D(len(np.unique(y_train)), kernel_size=12, activation='softmax', data_format='channels_first'),
     # tf.keras.layers.Conv2D(len(np.unique(y_train)), kernel_size=1),
     # tf.keras.layers.Dropout(0.5),
     # tf.keras.layers.BatchNormalization(),
     # tf.keras.layers.GlobalMaxPooling2D(),
     # tf.keras.layers.Activation('softmax')
-    ], name='__temp__'.join(label))
+    ])
 
     if filename:
         model.load_weights(filename)
@@ -188,6 +157,7 @@ def get_conv(input_shape=(200, 200), filename=None):
 #%% add dense layer for training
 model = get_conv()
 model.add(tf.keras.layers.Flatten())
+# model.add(tf.keras.layers.Dense(len(np.unique(y_train))))
 
 print(model.summary())
 
@@ -222,30 +192,29 @@ def scheduler(epoch, lr):
 lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 
 #%% compile and train model
-# use loss=sparse_categorical_crossentropy for one-hot
-batch_size = 64
 model.compile(loss='categorical_crossentropy',
-# optimizer=RMSprop(lr=0.001),
 optimizer=tf.keras.optimizers.Adam(lr=0.001),
-metrics=['accuracy',f1_metric, pro_metric])
+metrics=['accuracy',f1_metric,pro_metric]
+)
 
 early_stopping = tf.keras.callbacks.EarlyStopping(monitor = 'val_pro_metric', patience=15, restore_best_weights=True, mode='max')
 
 log_dir = f'/home/nel/Desktop/tensorboard/{datetime.datetime.now().strftime("%m%d_%H%M")}'
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir)
 
-history = model.fit(datagen.flow(X_train, y_train_one_hot, batch_size=batch_size ),
-steps_per_epoch=len(X_train) // 64, 
-epochs=75,
+print(f'tensorboard --logdir {log_dir}')
+
+history = model.fit(X_train.astype(float), y_train_one_hot,
+epochs=50,
 verbose=1,
-validation_data=(np.array([(i) for i in X_test.astype(float)]), y_test_one_hot),
+validation_data=(X_test.astype(float), y_test_one_hot),
 class_weight=class_weight,
 shuffle=True,
-callbacks=[tensorboard_callback, lr_callback, early_stopping],
+callbacks=[tensorboard_callback]#, lr_callback, early_stopping],
 )
 
 #%% evaluate model
-model.evaluate(np.array([(i) for i in X_test.astype(float)]), y_test_one_hot, batch_size = len(X_test))
+model.evaluate(X_test.astype(float), y_test_one_hot, batch_size = len(X_test))
 
 #%% training curves
 # acc = history.history['accuracy']
