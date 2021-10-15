@@ -45,10 +45,13 @@ stitch = False
 overlap = 255
 
 # visualize results
-visualize_results = False
+visualize_results = True
+
+# store ALL results
+store_all = True
 
 # order cells by score to set thresh
-set_thresh = True
+set_thresh = False
 # minuimum score to show
 set_thresh_thresh = 0.1
 
@@ -71,6 +74,17 @@ os.makedirs(os.path.join(folder_to_watch, 'completed', current_date), exist_ok=T
 # set folder for finished images
 finished_folder = os.path.join(folder_to_watch, 'completed', current_date)
 
+# set up storage folder
+if store_all:
+    all_found_cells_csv = os.path.join(folder_to_watch, f'all_found_cells_{current_date}.csv')
+    # if creating a new file, write yolo classes as file header
+    if not os.path.exists(all_found_cells_csv):
+        with open(all_found_cells_csv, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerows(np.insert(yolo_classes,0,'').reshape([1,-1]))
+else:
+    all_found_cells_csv=False
+
 # set up threshold folder
 if set_thresh:
     thresh_folder = os.path.join(folder_to_watch, 'set_thresh')
@@ -86,7 +100,8 @@ network_times = []
 
 def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
                  stitch = False, overlap = 255,
-                 viz=False, thresh_folder=False, set_thresh_thresh=0.1):
+                 viz=False, store_csv=False,
+                 thresh_folder=False, set_thresh_thresh=0.1):
     
     read_start = time.time()
     
@@ -158,14 +173,24 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     # merge output df's
     combined_output = pd.concat(output)
     
-    # print total number of cells found
-    print(f'number of cells found = {combined_output.shape[0]}')
+    # write distribution of cell stages to file 
+    if store_csv:
+        # init counts with file name
+        counts = [os.path.basename(files)]
+        # append corresponding cell count for stage in yolo_classes
+        cell_dist = combined_output.name.value_counts()
+        for stage in yolo_classes:
+            if stage in cell_dist.index:
+                counts.append(cell_dist[stage])
+            else:
+                counts.append(0)
+        # write to file
+        with open(store_csv, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerows(np.array(counts).reshape([1,-1]))
     
     # mask only results from correct stage
     combined_output_stage = combined_output[combined_output.name == stage_of_interest]
-    
-    # print total number of stage_of_interest cells found
-    print(f'number of {stage_of_interest} cells found = {combined_output_stage.shape[0]}')
 
     # mask stage output above thresh
     combined_output_thresh = combined_output_stage[combined_output_stage.confidence >= thresh].copy() # .copy() needed to avoid pandas warning
@@ -274,7 +299,8 @@ while True:
         start = time.time()
         cell_found = run_pipeline(files_analyzed, nn_model, stage_of_interest, thresh, results_csv,
                                   stitch=stitch, overlap=overlap,
-                                  viz=visualize_results, thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
+                                  viz=visualize_results, store_csv=all_found_cells_csv,
+                                  thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
         
         times.append(time.time()-start)
         print(f'cell found: {cell_found}')
