@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 grid = 800 # grid size
-num_images = 20
+num_images = 100
 
 # visualize dataset
 viz = False
@@ -64,5 +64,12 @@ for i in range(num_images):
         plt.axis('off')
         plt.pause(.5)
     
-    # save to dataset folder
-    np.savez(f'/home/nel/Desktop/YOLOv1_ellipse/data/{i}', X=X, y=y)
+    # save training data
+    if i < int(0.7*num_images):
+        np.savez(f'/home/nel/Desktop/YOLOv1_ellipse/train_data/{i}', X=X, y=y)
+    # save validation data
+    elif i < int(0.9*num_images):
+        np.savez(f'/home/nel/Desktop/YOLOv1_ellipse/val_data/{i}', X=X, y=y)
+    # save testing data
+    else:
+        np.savez(f'/home/nel/Desktop/YOLOv1_ellipse/test_data/{i}', X=X, y=y)

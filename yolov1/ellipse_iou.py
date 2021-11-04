@@ -54,8 +54,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
-img = np.zeros((800,800)) # convert to FOV resolution (800x800)
-
 cx1=400
 cy1=400
 a1=20
@@ -89,3 +87,20 @@ plt.imshow(combined)
 plt.title(intersection/union)
 
 print(f'IoU = {intersection/union}')
+
+#%% iou function
+def iou(pred, true):
+    pred_x, pred_y, pred_a, pred_b, pred_theta = pred
+    ellipse_pred = cv2.ellipse(np.zeros((800,800)), (pred_x,pred_y), (pred_a,pred_b), pred_theta, 0, 360, 1, -1)
+    
+    true_x, true_y, true_a, true_b, true_theta = true
+    ellipse_true = cv2.ellipse(np.zeros((800,800)), (true_x,true_y), (true_a,true_b), true_theta, 0, 360, 1, -1)
+
+    combined = ellipse_pred + ellipse_true
+    intersection = np.sum(combined == 2)
+    union = np.sum(combined > 0)
+    
+    plt.imshow(combined)
+    plt.title(intersection/union)
+    
+    return intersection/union
