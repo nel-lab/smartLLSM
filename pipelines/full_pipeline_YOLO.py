@@ -58,7 +58,9 @@ set_thresh_thresh = 0.1
 #%% model setup
 nn_model = torch.hub.load(path_to_yolo_repo, 'custom', path=path_to_weights, source='local')
 
-# check for valid stage_of_interest
+# ensure stage_of_interest is a list and check for valid inputs
+stage_of_interest = list(stage_of_interest)
+
 yolo_classes = ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']
 for stage in stage_of_interest:
     if not stage in yolo_classes:
