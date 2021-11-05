@@ -8,7 +8,7 @@ Created on Wed Oct 27 15:32:09 2021
 
 #%% setup
 import numpy as np
-from utils import *
+from utils_K_debug import *
 
 BS = 16
 S = 4
@@ -37,17 +37,17 @@ for i in range(BS):
     _, yp_temp = read_data(f'/home/nel/Desktop/YOLOv1_ellipse/train_data/{i}.npz', ypred=True)
     yp.append(yp_temp)
     
-    plt.figure()
-    show_results(X_temp, y_temp)
+    # plt.figure()
+    # show_results(X_temp, y_temp)
 
 X = np.array(X)
 y_true = np.array(y)
 
 # y_pred results
 y_pred = np.array(yp)
-# add random noise between [-0.05,0.05]
-y_pred += 0.05*(2*np.random.rand(*y_pred.shape)-1)
-# randomly offset by 10%
+# add 5% random noise
+y_pred += 0.05*np.random.rand(*y_pred.shape)
+# add 10% random offset
 y_pred *= 1 + 0.1*(2*np.random.rand(*y_pred.shape)-1)
 
 # totally random y_pred
@@ -56,9 +56,26 @@ y_pred *= 1 + 0.1*(2*np.random.rand(*y_pred.shape)-1)
 # y_true = np.arange((16*4*4*21)).reshape((16, 4, 4, 21))/100
 # y_pred = np.arange((16*4*4*21)).reshape((16, 4, 4, 21))/50
 
-#%% total yolo loss
+#%% total yolo loss - NUMPY
+from utils import yolo_loss
+
 l_total = yolo_loss(y_true, y_pred)
-print(f'yolo loss:  \t {l_total.round(5)}')
+
+print(f'yolo loss (numpy):  \t {l_total}')
+
+#%% total yolo loss - K
+from utils_K import yolo_loss
+
+l_total = yolo_loss(y_true, y_pred).numpy()
+
+print(f'yolo loss (K):      \t {l_total}')
+
+#%% total yolo loss - K_debug
+from utils_K_debug import yolo_loss
+
+l_total = yolo_loss(y_true, y_pred).numpy()
+
+print(f'yolo loss (K debug):\t {l_total}')
 
 #%% test losses
 # print('-'*21)

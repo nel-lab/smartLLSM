@@ -11,7 +11,7 @@ import os, datetime
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
-from utils_K import read_data, show_results, yolo_loss, process
+from utils_K import *
 
 #%% prepare inputs
 '''
@@ -56,7 +56,7 @@ class Custom_Generator(tf.keras.utils.Sequence):
     # init paths and batch size
     def __init__(self, paths, batch_size):
         # shuffle paths
-        np.random.shuffle(paths)
+        # np.random.shuffle(paths)
         self.paths = paths
         self.batch_size = batch_size
       
@@ -161,11 +161,11 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten, LeakyReLU
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
 
-div_factor = 8
+div_factor = 16
 lrelu = LeakyReLU(alpha=0.1)
 
 model = Sequential()
-model.add(Conv2D(filters=64//div_factor*2, kernel_size= (7, 7), strides=(1, 1), input_shape = (IMG_SIZE, IMG_SIZE, 1), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=64//div_factor, kernel_size= (7, 7), strides=(1, 1), input_shape = (IMG_SIZE, IMG_SIZE, 1), padding = 'same', activation=lrelu))
 model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding = 'same'))
 
 model.add(Conv2D(filters=192//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
@@ -173,27 +173,27 @@ model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding = 'same'))
 
 model.add(Conv2D(filters=128//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
 model.add(Conv2D(filters=256//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
 model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding = 'same'))
 
 model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
 model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=256//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=512//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
 model.add(Conv2D(filters=512//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
 model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
 model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding = 'same'))
 
 model.add(Conv2D(filters=512//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
 model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=512//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
-# model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=512//div_factor, kernel_size= (1, 1), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
+model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), padding = 'same', activation=lrelu))
 model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), strides=(2, 2), padding = 'same'))
 
 model.add(Conv2D(filters=1024//div_factor, kernel_size= (3, 3), activation=lrelu))
@@ -245,32 +245,49 @@ def lr_schedule(epoch, lr):
             return LR_SCHEDULE[i][1]
     return lr
 
+def scheduler(epoch, lr):
+  if epoch < 15:
+    return float(lr)
+  else:
+    return float(lr * tf.math.exp(-0.1))
+
+lr_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
+
 #%% save best weights
 # defining a function to save the weights of best model
 from tensorflow.keras.callbacks import ModelCheckpoint
 
-mcp_save = ModelCheckpoint('weight.hdf5', save_best_only=True, monitor='val_loss', mode='min')
+mcp_save = ModelCheckpoint(f'/home/nel/Desktop/YOLOv1_ellipse/{datetime.datetime.now().strftime("%m%d_%H%M")}.hdf5',
+                           save_best_only=True)
 
 #%% compile and train
-model.compile(loss=yolo_loss, optimizer='adam', run_eagerly = True)
+model.compile(loss=yolo_loss,
+              optimizer=tf.keras.optimizers.Adam(lr=0.001),
+              run_eagerly = True,
+              # metrics = [center_loss, params_loss, obj_loss, no_obj_loss, class_loss]
+              )
 
 log_dir = f'/home/nel/Desktop/tensorboard/{datetime.datetime.now().strftime("%m%d_%H%M")}'
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir)
 
 model.fit(x=train_batch_generator,
           steps_per_epoch = int(len(train_paths) // BATCH_SIZE),
-          epochs = 150,
+          epochs = 100,
           verbose = 1,
           validation_data = val_batch_generator,
           validation_steps = int(len(val_paths) // BATCH_SIZE),
           callbacks=[
               tensorboard_callback,
-              CustomLearningRateScheduler(lr_schedule),
+              lr_callback,
+              # CustomLearningRateScheduler(lr_schedule),
               mcp_save
           ])
 
 #%% test model
-X_test, y_test = test_batch_generator.__getitem__(0)
-y_pred = model.predict(X_test)
+# X_test, y_test = test_batch_generator.__getitem__(0)
+# y_pred = model.predict(X_test)
 
-show_results(X_test[0], y_pred[0], .73)
+# yp_classes, _, yp_response = process(y_pred)
+# yt_classes, _, yt_response = process(y_test)
+
+# # show_results(X_test[0], y_pred[0], .73)

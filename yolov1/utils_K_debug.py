@@ -298,97 +298,21 @@ def iou(true_params_mask, pred_params_mask, loc_idx, viz=False):
     
     return bb_idx
 
-def center_loss(true_center_mask, pred_center_mask, lambda_coord = 5):
+def center_loss(y_true, y_pred):
     '''
+    y_true/pred: [BS, S, S, C + B*(P+1)]
+
     true/pred_mask: [number_objects, 2] (x/y coord)
     
     loss = lambda_coord*SSE:
         lambda_coord*sum((true-pred)**2), if object in cell and bb responsible for detection
     '''
     
-    # take SSE    
-    loss = K.sum((true_center_mask - pred_center_mask)**2)
+    lambda_coord = 5
     
-    return lambda_coord*loss
-
-def params_loss(true_param_mask, pred_param_mask, lambda_coord = 5):
-    '''
-    true/pred_mask: [number_objects, 3] (a/b/theta)
-    
-    loss = lambda_coord*SSE:
-        lambda_coord*sum((true-pred)**2), if object in cell and bb responsible for detection
-    '''
-    
-    # take SSE, with square root of a/b/theta as per yolo loss equation
-    loss = K.sum((true_param_mask**0.5 - pred_param_mask**0.5)**2)
-    
-    return lambda_coord*loss
-
-def obj_loss(pred_response_mask):
-    '''
-    pred_mask: [number_objects,]
-        masked for object and bb responsible for detection
-        true_mask = 1
-        
-    loss = SSE:
-        sum((true-pred)**2), if object in cell and bb responsible for detection
-        true = 1
-    '''
-    
-    # SSE
-    loss = K.sum((1 - pred_response_mask)**2)
-
-    return loss
-
-def no_obj_loss(pred_response, loc_and_bb_idx, lambda_noobj = 0.5):
-    '''
-    pred_mask: [BS, S, S, B]
-        true_mask = 0
-    loc_and_bb_idx: [number_objects, 4]
-        4: index into [BS, S, S, B] for boxes with object and bb responsible for detection
-        !! will subtract out these values (squared) from no_obj_loss,
-        !! acts as method to mask response for NO object and bounding box NOT responsible for prediction
-        
-    loss = lambda_noobj*SSE:
-        lambda_noobj*sum((true-pred)**2), if NO object in cell and bb NOT responsible for detection
-        true = 0, simplifies to lambda_noobj*sum(pred**2)
-    '''
-    
-    # take SSE
-    loss = K.sum(pred_response**2)
-    
-    # subtract out squared responses for cells with object and bb responsible for detection
-    loss -= K.sum(tf.gather_nd(pred_response, loc_and_bb_idx)**2)
-    
-    return lambda_noobj*loss
-
-def class_loss(true_class_mask, pred_class_mask):
-    '''
-    true/pred_mask: [number_objects, C]
-    
-    loss = SSE:
-        sum((true-pred)**2), if object in cell
-    '''
-
-    # take SSE    
-    loss = K.sum((true_class_mask - pred_class_mask)**2)
-    
-    return loss
-
-def yolo_loss(y_true, y_pred):
-    '''
-    y_true/pred: [BS, S, S, C + B*(P+1)],
-    transformed into:
-        classes: [BS, S, S, C]
-        params: [BS, S, S, B, P]
-        response: [BS, S, S, B]
-
-    loss = sum of individual losses/BS
-    '''
-        
     # extract parameters from output
-    true_class, true_params, true_response = process(y_true)
-    pred_class, pred_params, pred_response = process(y_pred)
+    _, true_params, true_response = process(y_true)
+    _, pred_params, _ = process(y_pred)
         
     # mask if object in cell (when B=0 in true response): [BS, S, S]
     # True if object in cell, False if no object
@@ -414,29 +338,12 @@ def yolo_loss(y_true, y_pred):
     # ground truth params (first bounding box is ground truth)
     true_params_masked = true_params[obj_mask][:,0,:]
     
-    # mask response for object and bounding box responsible for prediction
-    pred_response_masked = tf.gather_nd(pred_response, loc_and_bb_idx)
-            
-    # calc losses
-    loss = [
-        # center loss (mask for object, bb, x/y (first two coloumns))
-        center_loss(true_params_masked[:,:2], pred_params_masked[:,:2]),
-        
-        # params loss (mask for object, bb, a/b/theta (remaining three coloumns))
-        params_loss(true_params_masked[:,2:], pred_params_masked[:,2:]),
-        
-        # object loss (mask for object, bb (true = 1))
-        obj_loss(pred_response_masked),
-        
-        # no object loss (will mask for NO object, bb NOT responsible (true = 0))
-        no_obj_loss(pred_response, loc_and_bb_idx),
-        
-        # class loss (mask for object)
-        class_loss(tf.boolean_mask(true_class, obj_mask), tf.boolean_mask(pred_class, obj_mask))
-        ]
-        
-    # sum individual losses
-    loss = tf.reduce_sum(loss)
+    true_center_mask = true_params_masked[:,:2]
+    pred_center_mask = pred_params_masked[:,:2]
+    
+    # take SSE    
+    loss = K.sum((true_center_mask - pred_center_mask)**2)
+    loss *= lambda_coord
     
     # batch size
     batch_size = K.shape(y_true)[0]
@@ -445,5 +352,238 @@ def yolo_loss(y_true, y_pred):
         
     # average loss over batch size
     loss /= batch_size
+    
+    return loss
+
+def params_loss(y_true, y_pred):
+    '''
+    y_true/pred: [BS, S, S, C + B*(P+1)]
+    
+    true/pred_mask: [number_objects, 3] (a/b/theta)
+    
+    loss = lambda_coord*SSE:
+        lambda_coord*sum((true-pred)**2), if object in cell and bb responsible for detection
+    '''
         
+    lambda_coord = 5
+    
+    # extract parameters from output
+    _, true_params, true_response = process(y_true)
+    _, pred_params, _ = process(y_pred)
+        
+    # mask if object in cell (when B=0 in true response): [BS, S, S]
+    # True if object in cell, False if no object
+    obj_mask = true_response[...,0] == 1
+        
+    # mask which bounding box is responsible for prediction based on IoU score
+    
+    # grid index of object: [number_object, 3]
+    # 3 columns: [truech number, grid x, grid y]
+    loc_idx = tf.where(obj_mask)
+        
+    # index of bounding box responsible for prediction (max IoU)
+    # only need last two columns of loc_idx (grid x/y) for converting to global params
+    bb_idx = iou(true_params[obj_mask], pred_params[obj_mask], loc_idx[:, -2:])
+    
+    # concat bb_idx with loc_idx
+    loc_and_bb_idx = tf.concat([loc_idx, bb_idx[...,None]], 1)
+    
+    # get params of responsible bounding box for center/params loss
+    # tuple and transpose convert idx to sequence of arrays describing: [batch number, grid x, grid y, bb_number]
+    pred_params_masked = tf.gather_nd(pred_params, loc_and_bb_idx)
+    
+    # ground truth params (first bounding box is ground truth)
+    true_params_masked = true_params[obj_mask][:,0,:]
+    
+    true_param_mask = true_params_masked[:,2:]
+    pred_param_mask = pred_params_masked[:,2:]
+        
+    # take SSE, with square root of a/b/theta as per yolo loss equation
+    loss = K.sum((true_param_mask**0.5 - pred_param_mask**0.5)**2)
+    
+    loss *= lambda_coord
+    
+    # batch size
+    batch_size = K.shape(y_true)[0]
+    # convert to same dtype as loss
+    batch_size = tf.cast(batch_size, loss.dtype)
+        
+    # average loss over batch size
+    loss /= batch_size
+    
+    return loss
+
+def obj_loss(y_true, y_pred):
+    '''
+    y_true/pred: [BS, S, S, C + B*(P+1)]
+    
+    pred_mask: [number_objects,]
+        masked for object and bb responsible for detection
+        true_mask = 1
+        
+    loss = SSE:
+        sum((true-pred)**2), if object in cell and bb responsible for detection
+        true = 1
+    '''
+    
+    # extract parameters from output
+    _, true_params, true_response = process(y_true)
+    _, pred_params, pred_response = process(y_pred)
+        
+    # mask if object in cell (when B=0 in true response): [BS, S, S]
+    # True if object in cell, False if no object
+    obj_mask = true_response[...,0] == 1
+        
+    # mask which bounding box is responsible for prediction based on IoU score
+    
+    # grid index of object: [number_object, 3]
+    # 3 columns: [truech number, grid x, grid y]
+    loc_idx = tf.where(obj_mask)
+        
+    # index of bounding box responsible for prediction (max IoU)
+    # only need last two columns of loc_idx (grid x/y) for converting to global params
+    bb_idx = iou(true_params[obj_mask], pred_params[obj_mask], loc_idx[:, -2:])
+    
+    # concat bb_idx with loc_idx
+    loc_and_bb_idx = tf.concat([loc_idx, bb_idx[...,None]], 1)
+    
+    # mask response for object and bounding box responsible for prediction
+    pred_response_masked = tf.gather_nd(pred_response, loc_and_bb_idx)
+        
+    # SSE
+    loss = K.sum((1 - pred_response_masked)**2)
+
+    # batch size
+    batch_size = K.shape(y_true)[0]
+    # convert to same dtype as loss
+    batch_size = tf.cast(batch_size, loss.dtype)
+        
+    # average loss over batch size
+    loss /= batch_size
+    
+    return loss
+
+def no_obj_loss(y_true, y_pred):
+    '''
+    y_true/pred: [BS, S, S, C + B*(P+1)]
+    
+    pred_mask: [BS, S, S, B]
+        true_mask = 0
+    loc_and_bb_idx: [number_objects, 4]
+        4: index into [BS, S, S, B] for boxes with object and bb responsible for detection
+        !! will subtract out these values (squared) from no_obj_loss,
+        !! acts as method to mask response for NO object and bounding box NOT responsible for prediction
+        
+    loss = lambda_noobj*SSE:
+        lambda_noobj*sum((true-pred)**2), if NO object in cell and bb NOT responsible for detection
+        true = 0, simplifies to lambda_noobj*sum(pred**2)
+    '''
+    
+    lambda_noobj = 0.5
+    
+    # extract parameters from output
+    _, true_params, true_response = process(y_true)
+    _, pred_params, pred_response = process(y_pred)
+        
+    # mask if object in cell (when B=0 in true response): [BS, S, S]
+    # True if object in cell, False if no object
+    obj_mask = true_response[...,0] == 1
+        
+    # mask which bounding box is responsible for prediction based on IoU score
+    
+    # grid index of object: [number_object, 3]
+    # 3 columns: [truech number, grid x, grid y]
+    loc_idx = tf.where(obj_mask)
+        
+    # index of bounding box responsible for prediction (max IoU)
+    # only need last two columns of loc_idx (grid x/y) for converting to global params
+    bb_idx = iou(true_params[obj_mask], pred_params[obj_mask], loc_idx[:, -2:])
+    
+    # concat bb_idx with loc_idx
+    loc_and_bb_idx = tf.concat([loc_idx, bb_idx[...,None]], 1)
+        
+    # take SSE
+    loss = K.sum(pred_response**2)
+    
+    # subtract out squared responses for cells with object and bb responsible for detection
+    loss -= K.sum(tf.gather_nd(pred_response, loc_and_bb_idx)**2)
+    
+    loss *= lambda_noobj
+    
+    # batch size
+    batch_size = K.shape(y_true)[0]
+    # convert to same dtype as loss
+    batch_size = tf.cast(batch_size, loss.dtype)
+        
+    # average loss over batch size
+    loss /= batch_size
+    
+    return loss
+    
+def class_loss(y_true, y_pred):
+    '''
+    y_true/pred: [BS, S, S, C + B*(P+1)]
+
+    true/pred_mask: [number_objects, C]
+    
+    loss = SSE:
+        sum((true-pred)**2), if object in cell
+    '''
+
+    # extract parameters from output
+    true_class, _, true_response = process(y_true)
+    pred_class, _, _ = process(y_pred)
+        
+    # mask if object in cell (when B=0 in true response): [BS, S, S]
+    # True if object in cell, False if no object
+    obj_mask = true_response[...,0] == 1
+    
+    true_class_mask = tf.boolean_mask(true_class, obj_mask)
+    pred_class_mask = tf.boolean_mask(pred_class, obj_mask)
+
+    # take SSE    
+    loss = K.sum((true_class_mask - pred_class_mask)**2)
+    
+    # batch size
+    batch_size = K.shape(y_true)[0]
+    # convert to same dtype as loss
+    batch_size = tf.cast(batch_size, loss.dtype)
+        
+    # average loss over batch size
+    loss /= batch_size
+    
+    return loss
+
+def yolo_loss(y_true, y_pred):
+    '''
+    y_true/pred: [BS, S, S, C + B*(P+1)],
+    transformed into:
+        classes: [BS, S, S, C]
+        params: [BS, S, S, B, P]
+        response: [BS, S, S, B]
+
+    loss = sum of individual losses/BS
+    '''
+                    
+    # calc losses
+    loss = [
+        # center loss (mask for object, bb, x/y (first two coloumns))
+        center_loss(y_true, y_pred),
+        
+        # params loss (mask for object, bb, a/b/theta (remaining three coloumns))
+        params_loss(y_true, y_pred),
+        
+        # object loss (mask for object, bb (true = 1))
+        obj_loss(y_true, y_pred),
+        
+        # no object loss (will mask for NO object, bb NOT responsible (true = 0))
+        no_obj_loss(y_true, y_pred),
+        
+        # class loss (mask for object)
+        class_loss(y_true, y_pred)
+        ]
+        
+    # sum individual losses
+    loss = tf.reduce_sum(loss)
+    
     return loss

@@ -242,7 +242,6 @@ def global_params(params, loc_i, loc_j, image_w=IMG_SIZE, image_h=IMG_SIZE):
     a = max(a, 0)
     b = max(b,0)
     
-    
     global_params = np.array([x,y,a,b,theta])
     
     return global_params
@@ -326,12 +325,12 @@ def params_loss(true_param_mask, pred_param_mask, lambda_coord = 5):
     
     # take square root of a/b (per yolo loss equation)
     # true params
-    true_param_mask[:,:2] = true_param_mask[:,:2]**0.5
+    # true_param_mask[:,:2] = true_param_mask[:,:2]**0.5
     # pred params
-    pred_param_mask[:,:2] = pred_param_mask[:,:2]**0.5
+    # pred_param_mask[:,:2] = pred_param_mask[:,:2]**0.5
     
     # take SSE    
-    loss = np.sum((true_param_mask - pred_param_mask)**2)
+    loss = np.sum((true_param_mask**0.5 - pred_param_mask**0.5)**2)
     
     return lambda_coord*loss
 
@@ -445,10 +444,12 @@ def yolo_loss(y_true, y_pred):
         class_loss(true_class[obj_mask], pred_class[obj_mask])
         ]
     
-    return np.sum(loss)
-
-#%%
-true = np.arange(5*7*7*15).reshape(5,7,7,15)/25
-pred = np.arange(5*7*7*15).reshape(5,7,7,15)/32
-
-print(yolo_loss(true,pred))
+    loss = np.sum(loss)
+    
+    # batch size
+    batch_size = y_true.shape[0]
+        
+    # average loss over batch size
+    loss /= batch_size
+        
+    return loss
