@@ -23,7 +23,7 @@ from skimage import io
 import torch
 
 #%% user setup
-stage_of_interest = 'prophase'
+stage_of_interest = ['prophase', 'metaphase', 'telophase']
 thresh = 0.0
 
 folder_to_watch = '/home/nel/Desktop/Smart Micro/full_pipeline_yolo_test/watch folder'
@@ -45,7 +45,7 @@ stitch = False
 overlap = 255
 
 # visualize results
-visualize_results = True
+visualize_results = False
 
 # store ALL results
 store_all = True
@@ -60,8 +60,9 @@ nn_model = torch.hub.load(path_to_yolo_repo, 'custom', path=path_to_weights, sou
 
 # check for valid stage_of_interest
 yolo_classes = ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']
-if not stage_of_interest in yolo_classes:
-    raise ValueError(f'stage_of_interest ({stage_of_interest}) is not valid, please choose from {yolo_classes}')
+for stage in stage_of_interest:
+    if not stage in yolo_classes:
+        raise ValueError(f'"{stage}" stage_of_interest is not valid, please choose from {yolo_classes}')
 
 #%% finish setup
 # date and csv path
@@ -172,7 +173,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     
     # merge output df's
     combined_output = pd.concat(output)
-    
+        
     # write distribution of cell stages to file 
     if store_csv:
         # init counts with file name
@@ -190,7 +191,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
             writer.writerows(np.array(counts).reshape([1,-1]))
     
     # mask only results from correct stage
-    combined_output_stage = combined_output[combined_output.name == stage_of_interest]
+    combined_output_stage = combined_output[combined_output.name.isin(stage_of_interest)]
 
     # mask stage output above thresh
     combined_output_thresh = combined_output_stage[combined_output_stage.confidence >= thresh].copy() # .copy() needed to avoid pandas warning
@@ -203,7 +204,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
         combined_output_thresh.slice = ''
 
     # extract useful info
-    combined_output_thresh = combined_output_thresh[['fname','slice','xcenter','ycenter','confidence']]
+    combined_output_thresh = combined_output_thresh[['fname','slice','xcenter','ycenter','confidence','name']]
         
     # save to csv
     all_info = combined_output_thresh.to_numpy()
@@ -249,7 +250,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
             n = int(np.ceil(np.sqrt(len(all_info))))
             fig = plt.figure()
             count = 1
-            for (_, idx, cx, cy, _) in all_info:
+            for (_, idx, cx, cy, _, name) in all_info:
                 '''
                 WIP, need to update if multiple files passed in
                 '''
@@ -261,7 +262,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
                         im = im[int(idx)]
                                                         
                 ax = fig.add_subplot(n,n,count)
-                ax.set_title(f'{os.path.basename(files)} {idx}')
+                ax.set_title(f'{os.path.basename(files)} {idx} {name}')
                 ax.axis('off')
                 ax.imshow(im.squeeze(), cmap='gray',
                           vmin=np.percentile(im,1), vmax=np.percentile(im,99))
@@ -309,7 +310,7 @@ while True:
         
         # move files to completed folder
         os.replace(files_analyzed, os.path.join(finished_folder, os.path.basename(files_analyzed)))
-              
+
     else:
         print(f'waiting for files...{len(files_all)} file(s)  time: {time.time()-start_loop_time}', end='\r') #end='\r' will prevent generating a new line and will overwrite this line over and over
         time.sleep(delay)
