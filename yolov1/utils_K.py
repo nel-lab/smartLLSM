@@ -17,17 +17,20 @@ import tensorflow.keras.backend as K
 #%% global variables
 IMG_SIZE = 800
 S = 7
-B = 2
+B = 1
 C = 3
 P = 5
 
-# label dictionary
+LAMBDA_COORD = 25
+LAMBDA_NOOBJ = 0.5
+# to penalize params, multiply LAMBDA_COORD*PARAM_COEFF
+PARAM_COEFF = 3
+
 LABEL_DICT = {0: 'small',
               1: 'medium',
               2: 'large'}
 
-# threshold for bounding box detection response
-DETECTION_THRESH = 0
+DETECTION_THRESH = 0.25
 
 #%% read and show data functions
 # read_data function
@@ -58,7 +61,7 @@ def read_data(data_path, ypred = False):
     image = (image-image.min())/(image.max()-image.min())
     
     # create label_matrix for training YOLO
-    label_matrix = np.zeros([S, S, C + B*(P+1)])
+    label_matrix = np.zeros([S, S, C + B*(P+1)], dtype=np.float32)
    
     for l in label:
         # convert label to integers
@@ -71,8 +74,9 @@ def read_data(data_path, ypred = False):
         y /= image_h
         a /= image_w
         b /= image_h
-        theta = theta % 180 # theta = [0-180]
-        theta /= 180        # theta = [0-1]
+        theta = np.sin(np.radians(theta))
+        # theta = theta % 180 # theta = [0-180]
+        # theta /= 180        # theta = [0-1]
         
         # convert x and y to grid location
         loc = [S * x, S * y]
@@ -143,7 +147,8 @@ def show_results(image, label, thresh = DETECTION_THRESH):
                 
                 a *= image_w
                 b *= image_h
-                theta *= 180    
+                theta = np.degrees(np.arcsin(theta))
+                # theta *= 180
                 
                 x = x.astype(int)
                 y = y.astype(int)
@@ -182,21 +187,30 @@ at each cell location, output =
 C1, C2, C3, x1, y1, a1, b1, t1, R1, x2, y2, a2, b2, t2, R2, ...
 '''
 
-def process(output):
+def process(output, numpy = False):
     '''
     output: [BS, S, S, C+B*(P+1)]
+    
+    numpy flag:
+        ensure output are numpy arrays that have been squeezed to remove extra dimensions
     
     classes: [BS, S, S, C]
     params: [BS, S, S, B, P]
     response: [BS, S, S, B]
     '''
     
-    classes = output[...,:3]
+    classes = output[...,:C]
     params_all = output[...,C:]
     params_all = K.reshape(params_all, (-1,S,S,B,P+1))
     params = params_all[...,:-1]
     response = params_all[...,-1]
     
+    # covert to squeezed numpy arrays
+    if numpy:              
+        classes = np.array(classes).squeeze()
+        params = np.array(params).squeeze()
+        response = np.array(response).squeeze()
+            
     return classes, params, response
 
 def global_params(params, loc_i, loc_j, image_w=IMG_SIZE, image_h=IMG_SIZE):
@@ -223,7 +237,8 @@ def global_params(params, loc_i, loc_j, image_w=IMG_SIZE, image_h=IMG_SIZE):
     
     a *= image_w
     b *= image_h
-    theta *= 180    
+    theta = np.degrees(np.arcsin(theta))
+    # theta *= 180
     
     # need to be ints for cv2.ellipse
     x = int(x)
@@ -298,7 +313,7 @@ def iou(true_params_mask, pred_params_mask, loc_idx, viz=False):
     
     return bb_idx
 
-def center_loss(true_center_mask, pred_center_mask, lambda_coord = 5):
+def center_loss(true_center_mask, pred_center_mask, lambda_coord = LAMBDA_COORD):
     '''
     true/pred_mask: [number_objects, 2] (x/y coord)
     
@@ -311,7 +326,7 @@ def center_loss(true_center_mask, pred_center_mask, lambda_coord = 5):
     
     return lambda_coord*loss
 
-def params_loss(true_param_mask, pred_param_mask, lambda_coord = 5):
+def params_loss(true_param_mask, pred_param_mask, lambda_coord = LAMBDA_COORD*PARAM_COEFF):
     '''
     true/pred_mask: [number_objects, 3] (a/b/theta)
     
@@ -340,7 +355,7 @@ def obj_loss(pred_response_mask):
 
     return loss
 
-def no_obj_loss(pred_response, loc_and_bb_idx, lambda_noobj = 0.5):
+def no_obj_loss(pred_response, loc_and_bb_idx, lambda_noobj = LAMBDA_NOOBJ):
     '''
     pred_mask: [BS, S, S, B]
         true_mask = 0
@@ -375,7 +390,7 @@ def class_loss(true_class_mask, pred_class_mask):
     
     return loss
 
-def yolo_loss(y_true, y_pred):
+def yolo_loss(y_true, y_pred, individual = False):
     '''
     y_true/pred: [BS, S, S, C + B*(P+1)],
     transformed into:
@@ -402,8 +417,12 @@ def yolo_loss(y_true, y_pred):
         
     # index of bounding box responsible for prediction (max IoU)
     # only need last two columns of loc_idx (grid x/y) for converting to global params
-    bb_idx = iou(true_params[obj_mask], pred_params[obj_mask], loc_idx[:, -2:])
     
+    # bb_idx = iou(true_params[obj_mask], pred_params[obj_mask], loc_idx[:, -2:])
+    
+    # replace iou function call with tensor of 0's (only 1 bounding box)
+    bb_idx = tf.zeros(len(loc_idx), dtype=loc_idx.dtype)
+        
     # concat bb_idx with loc_idx
     loc_and_bb_idx = tf.concat([loc_idx, bb_idx[...,None]], 1)
     
@@ -434,16 +453,182 @@ def yolo_loss(y_true, y_pred):
         # class loss (mask for object)
         class_loss(tf.boolean_mask(true_class, obj_mask), tf.boolean_mask(pred_class, obj_mask))
         ]
-        
-    # sum individual losses
-    loss = tf.reduce_sum(loss)
-    
+            
     # batch size
     batch_size = K.shape(y_true)[0]
-    # convert to same dtype as loss
-    batch_size = tf.cast(batch_size, loss.dtype)
+    
+    # batch_size = tf.cast(batch_size, loss[0].dtype)
+    # output = [l/batch_size for l in loss]
+    # output = [l.numpy().round(3) for l in loss]
+    # print(output)
+
+    # return individual losses if flagged
+    if individual:
+        # convert batch_size to same dtype as first loss
+        batch_size = tf.cast(batch_size, loss[0].dtype)
         
-    # average loss over batch size
-    loss /= batch_size
+        # average individual losses over batch size
+        loss = [l/batch_size for l in loss]
+            
+    # return single loss if not flagged
+    else:
+        # sum individual losses
+        loss = tf.reduce_sum(loss)
         
+        # convert batch_size to same dtype as loss
+        batch_size = tf.cast(batch_size, loss.dtype)
+            
+        # average loss over batch size
+        loss /= batch_size
+            
     return loss
+
+#%% show_loss_results fuction
+def show_loss_results(image, label, pred, thresh = DETECTION_THRESH):
+    
+    # calculate individual loss (must pass in tensors with dtype = 'float32')
+    loss = yolo_loss(tf.convert_to_tensor(label, dtype='float32'), tf.convert_to_tensor(pred, dtype='float32'), individual = True)
+    
+    # round loss for viz
+    loss = [l.numpy().round(3) for l in loss]
+    
+    # squeeze arrays after getting loss (ie remove batch size)
+    image = image.squeeze()
+    label = label.squeeze()
+    pred = pred.squeeze()
+    
+    S = label.shape[1]
+    
+    # create copy of image for drawing ellipse
+    im = np.copy(image).astype(image.dtype)
+        
+    # get image shape to revert label outputs
+    image_h, image_w = im.shape[:2]
+    
+    # loop over all grid locations and draw ellipse/label - FOR LABEL
+    for loc_i in range(S):
+        for loc_j in range(S):
+            
+            grid_outputs = label[loc_i, loc_j, :]
+            
+            # reshape label_matrix to Bx(C+P+1) (num_bb x num_class + num_params + response)
+            bb_outputs = label[loc_i, loc_j, C:].reshape(B, P+1)
+            
+            # extract bounding box results if response above thresh     
+            if bb_outputs[:,-1].max() > thresh:
+                # chose bounding box with max response
+                bb_output_response = bb_outputs[np.argmax(bb_outputs[:,-1])]
+            
+                # extract ellipse parameters
+                x,y,a,b,theta = bb_output_response[:-1]
+
+                # convert x,y,a,b,theta back into image coordinates                
+                x += loc_j
+                x /= S                
+                x *= image_w                
+                
+                y += loc_i
+                y /= S
+                y *= image_h                
+                
+                # extract pred bb params to print in title
+                p = [i.round(3) for i in [a,b,theta]]
+                
+                a *= image_w
+                b *= image_h
+                theta = np.degrees(np.arcsin(theta))
+                # theta *= 180
+                
+                x = x.astype(int)
+                y = y.astype(int)
+                a = a.astype(int)
+                b = b.astype(int)
+                theta = theta.astype(int)
+                
+                # plot center/label
+                output = LABEL_DICT[np.argmax(grid_outputs[:C])]
+                plt.scatter(x, y, label = f'true: {output}', color = 'r', alpha = 0.3)
+                # plt.scatter(x, y, color = 'r', alpha = 0.3)
+                # plt.text(x+a*np.cos(np.radians(theta)), y, f'{output}', color = 'r', size = 'x-small', va = 'top')
+                
+    # loop over all grid locations and draw ellipse/label - FOR PRED
+    
+    # flag if object is found above thresh
+    pred_above_thresh = False
+    
+    # loop
+    for loc_i in range(S):
+        for loc_j in range(S):
+            
+            grid_outputs = pred[loc_i, loc_j, :]
+            
+            # reshape pred_matrix to Bx(C+P+1) (num_bb x num_class + num_params + response)
+            bb_outputs = pred[loc_i, loc_j, C:].reshape(B, P+1)
+            
+            # extract bounding box results if response above thresh     
+            if bb_outputs[:,-1].max() > thresh:
+                
+                # set flag to True
+                pred_above_thresh = True
+                # chose bounding box with max response
+                bb_output_response = bb_outputs[np.argmax(bb_outputs[:,-1])]
+            
+                # extract ellipse parameters
+                x,y,a,b,theta = bb_output_response[:-1]
+
+                # convert x,y,a,b,theta back into image coordinates                
+                x += loc_j
+                x /= S                
+                x *= image_w                
+                
+                y += loc_i
+                y /= S
+                y *= image_h                
+                
+                # extract pred bb params to print in title
+                p_pred = [i.round(3) for i in [a,b,theta]]
+                
+                a *= image_w
+                b *= image_h
+                theta = np.degrees(np.arcsin(theta))
+                # theta *= 180
+                
+                x = x.astype(int)
+                y = y.astype(int)
+                a = a.astype(int)
+                b = b.astype(int)
+                theta = theta.astype(int)
+                
+                # draw ellipse outline in gray
+                '''
+                fill doesn't work for some images (thickness = -1)?
+                use thickness > 0 or use plots of major and minor axis instead
+                '''
+                im = cv2.ellipse(im, (x,y), (a,b) ,theta, 0, 360, .5, 3)
+                # plt.plot([x, x+a*np.cos(np.radians(theta))], [y, y+a*np.sin(np.radians(theta))], color='r')
+                # plt.plot([x, x+b*np.cos(np.radians(theta+90))], [y, y+b*np.sin(np.radians(theta+90))], color='b')
+                        
+                output = LABEL_DICT[np.argmax(grid_outputs[:C])]
+                # plot center/label
+                plt.scatter(x, y, label = f'pred: {output}', color = 'b', alpha = 0.3)
+                # plt.scatter(x, y, color = 'b', alpha = 0.3)
+                # plt.text(x, y+a*np.sin(np.radians(theta)), f'{output}', color = 'b', size = 'x-small', va = 'bottom')
+
+    if not pred_above_thresh:
+        p_pred = 'no prediction'
+    
+    # show annotated image
+    plt.imshow(im, cmap='gray')
+    plt.title(f'{p}\n{p_pred}\n{loss}\n{sum(loss)}')
+    plt.legend()
+    
+    # show SxS grid
+    plt.xticks(np.arange(0,800,800/7))
+    plt.yticks(np.arange(0,800,800/7))
+    plt.grid()
+    ax = plt.gca()
+    ax.xaxis.set_ticklabels([])
+    ax.xaxis.set_ticks_position('none')
+    ax.yaxis.set_ticklabels([])
+    ax.yaxis.set_ticks_position('none')
+    
