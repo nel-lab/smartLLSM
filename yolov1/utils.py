@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 
 #%% global variables
 IMG_SIZE = 800
-S = 7
-B = 2
+S = 4
+B = 1
 C = 3
 P = 5
 
@@ -95,16 +95,27 @@ def read_data(data_path, ypred = False):
             label_matrix[loc_i, loc_j, C+P] = 1
             
             # if storing ypred, add the same results for other bounding boxes (will offset randomly later)
+            # if ypred:
+            #     for i in range(1,B):
+            #         start_idx = C+i*(P+1)
+            #         end_idx = start_idx + P+1
+            #         label_matrix[loc_i, loc_j, start_idx:end_idx] = [x, y, a, b, theta, 1]
+            
+            # if storing ypred, alter values
             if ypred:
-                for i in range(1,B):
-                    start_idx = C+i*(P+1)
-                    end_idx = start_idx + P+1
-                    label_matrix[loc_i, loc_j, start_idx:end_idx] = [x, y, a, b, theta, 1]
-
+                # one-hot label
+                label_matrix[loc_i, loc_j, :C] = [ypred, ypred, 1]
+                
+                # store ellipse params
+                label_matrix[loc_i, loc_j, C:C+P] = [x+ypred, y+ypred, a+ypred, b+ypred, theta+ypred]
+                
+                # response
+                label_matrix[loc_i, loc_j, C+P] = 1-ypred
+                
     return image, label_matrix
 
 # show_results fuction
-def show_results(image, label):
+def show_results(image, label, thresh = DETECTION_THRESH):
     
     S = label.shape[0]
     
@@ -123,8 +134,8 @@ def show_results(image, label):
             # reshape label_matrix to Bx(C+P+1) (num_bb x num_class + num_params + response)
             bb_outputs = label[loc_i, loc_j, C:].reshape(B, P+1)
             
-            # extract bounding box results if response above DETECTION_THRESH     
-            if bb_outputs[:,-1].max() > DETECTION_THRESH:
+            # extract bounding box results if response above thresh     
+            if bb_outputs[:,-1].max() > thresh:
                 # chose bounding box with max response
                 bb_output_response = bb_outputs[np.argmax(bb_outputs[:,-1])]
             
@@ -298,8 +309,9 @@ def iou(true_params_mask, pred_params_mask, loc_idx, viz=False):
             
             # store iou value
             ious[obj,bb] = intersection/union
-            
+
     bb_idx = np.argmax(ious, axis=-1)                
+
     return bb_idx
 
 def center_loss(true_center_mask, pred_center_mask, lambda_coord = 5):
@@ -403,11 +415,11 @@ def yolo_loss(y_true, y_pred):
     # grid index of object: [number_object, 3]
     # 3 columns: [batch number, grid x, grid y]
     loc_idx = np.argwhere(obj_mask==True)
-    
+        
     # index of bounding box responsible for prediction (max IoU)
     # only need last two columns of loc_idx (grid x/y) for converting to global params
     bb_idx = iou(true_params[obj_mask], pred_params[obj_mask], loc_idx[:, -2:])
-    
+            
     # concat bb_idx with loc_idx
     loc_and_bb_idx = np.column_stack([loc_idx, bb_idx])
     
@@ -444,12 +456,139 @@ def yolo_loss(y_true, y_pred):
         class_loss(true_class[obj_mask], pred_class[obj_mask])
         ]
     
-    loss = np.sum(loss)
-    
-    # batch size
-    batch_size = y_true.shape[0]
-        
-    # average loss over batch size
-    loss /= batch_size
-        
     return loss
+    
+    # loss = np.sum(loss)
+    
+    # # batch size
+    # batch_size = y_true.shape[0]
+        
+    # # average loss over batch size
+    # loss /= batch_size
+        
+    # return loss
+    
+#%% show_loss_results fuction
+def show_loss_results(image, label, pred, thresh = DETECTION_THRESH):
+    
+    loss = yolo_loss(label, pred)
+    
+    loss = [l.round(3) for l in loss]
+    
+    # squeeze arrays after getting loss (ie remove batch size)
+    image = image.squeeze()
+    label = label.squeeze()
+    pred = pred.squeeze()
+    
+    S = label.shape[1]
+    
+    # create copy of image for drawing ellipse
+    im = np.copy(image).astype(image.dtype)
+        
+    # get image shape to revert label outputs
+    image_h, image_w = im.shape[:2]
+    
+    # loop over all grid locations and draw ellipse/label - FOR LABEL
+    for loc_i in range(S):
+        for loc_j in range(S):
+            
+            grid_outputs = label[loc_i, loc_j, :]
+            
+            # reshape label_matrix to Bx(C+P+1) (num_bb x num_class + num_params + response)
+            bb_outputs = label[loc_i, loc_j, C:].reshape(B, P+1)
+            
+            # extract bounding box results if response above thresh     
+            if bb_outputs[:,-1].max() > thresh:
+                # chose bounding box with max response
+                bb_output_response = bb_outputs[np.argmax(bb_outputs[:,-1])]
+            
+                # extract ellipse parameters
+                x,y,a,b,theta = bb_output_response[:-1]
+
+                # convert x,y,a,b,theta back into image coordinates                
+                x += loc_j
+                x /= S                
+                x *= image_w                
+                
+                y += loc_i
+                y /= S
+                y *= image_h                
+ 
+                x = x.astype(int)
+                y = y.astype(int)
+                
+                # plot center/label
+                output = LABEL_DICT[np.argmax(grid_outputs[:C])]
+                plt.scatter(x, y, label = f'true: {output}', color = 'r', alpha = 0.3)
+
+                # extract bb params to print in title
+                p = [i.round(3) for i in [a,b,theta]]
+                
+    # loop over all grid locations and draw ellipse/label - FOR PRED
+    
+    # flag if object is found above thresh
+    pred_above_thresh = False
+    
+    # loop
+    for loc_i in range(S):
+        for loc_j in range(S):
+            
+            grid_outputs = pred[loc_i, loc_j, :]
+            
+            # reshape pred_matrix to Bx(C+P+1) (num_bb x num_class + num_params + response)
+            bb_outputs = pred[loc_i, loc_j, C:].reshape(B, P+1)
+            
+            # extract bounding box results if response above thresh     
+            if bb_outputs[:,-1].max() > thresh:
+                
+                # set flag to True
+                pred_above_thresh = True
+                # chose bounding box with max response
+                bb_output_response = bb_outputs[np.argmax(bb_outputs[:,-1])]
+            
+                # extract ellipse parameters
+                x,y,a,b,theta = bb_output_response[:-1]
+
+                # convert x,y,a,b,theta back into image coordinates                
+                x += loc_j
+                x /= S                
+                x *= image_w                
+                
+                y += loc_i
+                y /= S
+                y *= image_h                
+                
+                # extract pred bb params to print in title
+                p_pred = [i.round(3) for i in [a,b,theta]]
+                
+                a *= image_w
+                b *= image_h
+                theta *= 180    
+                
+                x = x.astype(int)
+                y = y.astype(int)
+                a = a.astype(int)
+                b = b.astype(int)
+                theta = theta.astype(int)
+                
+                # draw ellipse outline in gray
+                '''
+                fill doesn't work for some images (thickness = -1)?
+                use thickness > 0 or use plots of major and minor axis instead
+                '''
+                im = cv2.ellipse(im, (x,y), (a,b) ,theta, 0, 360, .5, 3)
+                # plt.plot([x, x+a*np.cos(np.radians(theta))], [y, y+a*np.sin(np.radians(theta))], color='r')
+                # plt.plot([x, x+b*np.cos(np.radians(theta+90))], [y, y+b*np.sin(np.radians(theta+90))], color='b')
+                        
+                output = LABEL_DICT[np.argmax(grid_outputs[:C])]
+                # plot center/label
+                plt.scatter(x, y, label = f'pred: {output}', color = 'b', alpha = 0.3)
+                
+    if not pred_above_thresh:
+        p_pred = 'no prediction'
+    
+    # show annotated image
+    plt.imshow(im, cmap='gray')
+    plt.axis('off')
+    plt.title(f'{p}\n{p_pred}\n{loss}\n{sum(loss)}')
+    plt.legend()
