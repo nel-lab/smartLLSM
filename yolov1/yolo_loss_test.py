@@ -77,6 +77,64 @@ l_total = yolo_loss(y_true, y_pred).numpy()
 
 print(f'yolo loss (K debug):\t {l_total}')
 
+#%% test each aspect of loss
+##%% setup
+import numpy as np
+import matplotlib.pyplot as plt
+from utils import read_data, yolo_loss, show_loss_results
+
+BS = 1
+S = 4
+B = 1
+C = 3
+P = 5
+
+'''
+at each cell location, output = 
+C1, C2, C3, x1, y1, a1, b1, t1, R1, x2, y2, a2, b2, t2, R2
+'''
+
+##%%
+plt.close('all')
+
+# for ypred in [0.04]:#, 0.7, 0.3, 0, -0.3, -0.7]:
+for ypred in [0.9, 0.7, 0.5, 0.2, 0.00001]:
+
+    X = []
+    y = []
+    
+    # y_pred
+    yp = []
+    
+    for i in range(BS):
+        X_temp, y_temp = read_data(f'/home/nel/Desktop/YOLOv1_ellipse/loss_test/{1}.npz')
+        X.append(X_temp)
+        y.append(y_temp)
+        
+        # y_pred
+        _, yp_temp = read_data(f'/home/nel/Desktop/YOLOv1_ellipse/loss_test/{1}.npz', ypred=ypred)
+        yp.append(yp_temp)
+    
+    X = np.array(X)
+    y_true = np.array(y)
+    
+    # y_pred
+    y_pred = np.array(yp)
+    # # add 5% random noise
+    # y_pred += 0.05*np.random.rand(*y_pred.shape)
+    # # add 10% random offset
+    # y_pred *= 1 + 0.1*(2*np.random.rand(*y_pred.shape)-1)
+
+    # loss
+    l_total = yolo_loss(y_true, y_pred)
+    print(l_total)
+    print(sum(l_total))
+    print()
+    
+    plt.cla()
+    show_loss_results(X, y_true, y_pred, 0)
+    plt.pause(1)
+
 #%% test losses
 # print('-'*21)
 # clas_true, pms_true, rs_true = process(y_true)
