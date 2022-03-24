@@ -96,25 +96,14 @@ else:
     thresh_folder=False
 
 #%% pipeline
-
-read_times = []
-preprocess_times = []
-network_times = []
-
 def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
                  stitch = False, overlap = 255,
                  viz=False, store_csv=False,
                  thresh_folder=False, set_thresh_thresh=0.1):
-    
-    read_start = time.time()
-    
+        
     # read in image
     raw = io.imread(files).astype(float)
-    
-    read_times.append(time.time()-read_start)
-    
-    preprocess_start = time.time()
-    
+            
     # add extra dimension if not tif stack
     if raw.ndim == 2:
         individual = True
@@ -156,15 +145,9 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     # convert uint16 to uint8 for yolo
     raw_8bit = ((raw-raw.min(axis=(1,2))[:,None,None])/(raw.max(axis=(1,2))[:,None,None]-raw.min(axis=(1,2))[:,None,None])*(2**8-1)).astype('uint8')
     raw_8bit = list(raw_8bit) # must be passed as list of images for yolo
-    
-    preprocess_times.append(time.time()-preprocess_start)
-    
-    network_start = time.time()
-    
+            
     # forward pass
     res = nn_model(raw_8bit)
-        
-    network_times.append(time.time() - network_start)
 
     # get output as list of pandas df's
     output = res.pandas().xywh
@@ -207,10 +190,13 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
 
     # extract useful info
     combined_output_thresh = combined_output_thresh[['fname','slice','xcenter','ycenter','confidence','name']]
+    
+    # add xcenter/ycenter coordinates relative to center of image
+    combined_output_thresh[['xcenter_rel','ycenter_rel']] = combined_output_thresh[['xcenter','ycenter']] - [i/2 for i in raw.shape[1:3]]
         
     # save to csv
     all_info = combined_output_thresh.to_numpy()
-           
+               
     # save images for set_thresh
     if thresh_folder:
         thresh_mask = combined_output_stage.confidence > set_thresh_thresh
@@ -252,7 +238,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
             n = int(np.ceil(np.sqrt(len(all_info))))
             fig = plt.figure()
             count = 1
-            for (_, idx, cx, cy, _, name) in all_info:
+            for (_, idx, cx, cy, _, name, _, _) in all_info:
                 '''
                 WIP, need to update if multiple files passed in
                 '''
@@ -286,8 +272,6 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
 #%% watch folder
 start_loop_time = time.time()
 
-times = []
-
 while True:
     # look for files
     files_all = sorted(glob.glob(os.path.join(folder_to_watch,'**','*.tif'), recursive=True))
@@ -305,7 +289,6 @@ while True:
                                   viz=visualize_results, store_csv=all_found_cells_csv,
                                   thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
         
-        times.append(time.time()-start)
         print(f'cell found: {cell_found}')
         print(f'pipeline time: {time.time()-start}')
         print('----------------------------')
