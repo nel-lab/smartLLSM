@@ -1,57 +1,6 @@
-# smart-micro
-Repo for smart microscopy project
+# smartLLSM
 
-# Pipeline Install instructions
-
-For GPU performance with cellpose: pytorch is needed 
-
-For GPU performance with tensorflow: cudatoolkit and cuda dnn are needed 
-
-Installation on windows has been a bit troublesome.  For example making sure that the python environment is reading the correct cuda runtime dlls (e.g. cudnn64_7.dll) has been a problem.  You may need to search the computer and remove other versions of cudnn64_7.dll
-
-```
-conda create -n sm_gpu tensorflow-estimator=2.0.0 tensorflow-gpu=2.0.0 h5py=2.10.0 scikit-image matplotlib opencv spyder
-conda activate  sm_gpu
-pip3 install torch==1.9.0+cu102 torchvision==0.10.0+cu102 torchaudio===0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
-pip3 install cellpose
-conda install cudatoolkit=10.1
-conda install cudnn=7.6.5
-```
-
-#
-Currently cells are segmented using cellpose.  Then classified.
-
-# Running
-```
-python full_pipeline_cellpose.py
-```
-This will start the classifier pipeline, which will watch the "watch folder" for files to process.  Once a file has been processed it will be moved to a "completed" folder, and a new row will appear in the .csv spreadsheet.
-
-Parameters are specified in `full_pipeline_cellpose.py` 
-
-Parameters to pay attention to :
-
-Folder where image files need to be sent:
-
-`folder_to_watch = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline_cellpose_test/watch_folder'  `
-
-
-Classifier model:
-
-`path_to_nn = '/home/nel-lab/Desktop/Jimmy/Smart Micro/full_pipeline_cellpose_test/prophase_classifier_5_10.hdf5'`
-
-Score threshold for having the microscope go take a high resolution 3D image of:
-`thresh = 0.7`
-
-# FCN Install instructions
-
-```conda create -n sm_FCN tensorflow-estimator=2.0.0 tensorflow-gpu=2.0.0 h5py=2.10.0 spyder numpy opencv matplotlib scikit-learn```
-
-# Annotator Install instructions
-
-```conda create -n sm_annotator tensorflow-estimator=2.0.0 tensorflow-gpu=2.0.0 h5py=2.10.0 spyder opencv scipy```
-
-# YOLO Pipeline install Instructions
+# YOLO Pipeline Installation Instructions
 
 ```
 conda create -n sm_yolo_pipeline python spyder pandas opencv tqdm matplotlib seaborn scikit-image
@@ -61,3 +10,25 @@ Install correct PyTorch version from [here](https://pytorch.org/get-started/loca
 ```
 conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
 ```
+
+```full_pipeline_YOLO.py``` watches a user-designated folder (```folder_to_watch```), waiting for tif files from microscope to populate folder before sending out for analysis. ```stage_of_interest``` dictate which cell phases YOLO should be on the lookout for (YOLO was trained to recognize the following phases: ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']). Our trained YOLO weights can be found [here](DROPBOX!!!). The pipeline stores results of its analysis to a csv (results_{DATE}.csv) within the watch folder. This csv contains cell-by-cell results with the following format (columns):
+> [file name, slice (if using a tiff stack), x cell center coordinate, y cell center coordinate, YOLO confidence score, cell phase/label, x cell center coordinate relative to center of image, y cell center coordinate relative to center of image]
+
+Other features of the pipeline:
+* ```store_all``` - tallies the number of cells in each phase for each file, results stored in all_cells_found_{DATE}.csv within watch folder
+* ```set_thresh``` - saves ALL cells detected by YOLO of a certain class and saves images to a folder. images are named based on their YOLO confidence score. This allows users to visually determine a threhsold they would like to use for detecting cells/initiating imaging.
+
+A demo of the YOLO pipeline can be found on [Google Colab](https://colab.research.google.com/drive/11YKXvFOAEAKNaunR0JqvFjqtqKtBgaHX?usp=sharing). Download demo tifs [here](DROPBOX!!!)
+
+# Annotator GUI Installation instructions
+
+```conda create -n sm_annotator tensorflow-estimator tensorflow-gpu h5py spyder opencv scipy```
+
+```annotation_gui.py``` provides an efficient script for manually annotating cells. Users can set their own dictionary of keys to label cell phases (```labels_dict```). In addition, a binary classifier can be used to filter out tiles that do not include mitotic cells (```nn_filter```). This bootstraps the annotation process by only prompting users to label tiles that include rarer mitotic cells. Our trained binary classifier weights can be found [here](DROPBOX).
+
+Demo tiles that are ready for annotation can be found [here](DROPBOX!!!). In order to generate tiles for annotation, tifs were first processed through [Cellpose](https://github.com/MouseLand/cellpose) to segment out individual cells.
+
+# Notes
+For those interested in training custom YOLO models from annotated cell data, a helper script (```yolo_create_dataset.py```) is provided for converting annotated cells to YOLO training data format (for more info, see [here](https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data#12-create-labels-1)
+
+Manually annotated cell data available upon request
