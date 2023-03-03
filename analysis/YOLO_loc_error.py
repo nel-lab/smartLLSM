@@ -22,19 +22,19 @@ path_to_weights = '/home/nel/Software/yolov5/runs/train/exp20/weights/best.pt'
 # yolo model
 nn_model = torch.hub.load(path_to_yolo_repo, 'custom', path=path_to_weights, source='local')
 
-# list of test file paths
+# list of test file paths (this is train/test data from model in microscope)
 test_files = np.load('/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/datasets/YOLO_test_files_0830.npy')
 
 # stages to screen out
 screen = [
     'edge',
     'blurry',
-    # 'interphase',
+    'interphase',
     # 'prophase',
-    # 'prometaphase',
-    # 'metaphase',
-    # 'anaphase',
-    # 'telophase',
+    'prometaphase',
+    'metaphase',
+    'anaphase',
+    'telophase',
     'junk',
     'TBD',
     'other'
@@ -184,12 +184,20 @@ median = np.median(loc_error_final).round(3)
 minn = loc_error_final.min().round(3)
 maxx = loc_error_final.max().round(3)
 
+# make pdfs editable
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+
 # plot hist + stats
 plt.figure()
 plt.hist(loc_error_final, bins = 50, range=(0,50))
 plt.axvline(mean, ls = '--', c='k', label = 'mean')
 plt.axvline(median, ls = ':', c='k', label= 'median')
-plt.title('YOLO Localization Error, px')
+plt.title('YOLO Localization Error, Prophase Cells (px)')
 ax = plt.gca()
 plt.text(0.5, 0.3, f'YOLO Cells: {yolo_count}\nCellpose Cells: {cellpose_count}\nMatched Cells: {len(loc_error_final)}\n\nMean: {mean}\nStd: {std}\n\nMedian: {median}\nMin: {minn}\nMax: {maxx}', transform=ax.transAxes)
 plt.legend()
+
+# save fig
+plt.savefig('/home/nel/Desktop/YOLO_localization_error_prophase.pdf', transparent=True, dpi=300)
