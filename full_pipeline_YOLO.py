@@ -6,13 +6,6 @@ Created on Tue Sep 14 10:12:21 2021
 @author: jimmytabet
 """
 
-#%% installation instructions
-'''
-conda create -n sm_yolo_pipeline python spyder pandas opencv tqdm matplotlib seaborn scikit-image
-conda activate sm_yolo_pipeline
-conda install pytorch torchvision=0.10.0=py39cuda111hcd06603_0_cuda torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
-'''
-
 #%% imports
 import os, time, csv, glob
 import numpy as np
@@ -23,26 +16,22 @@ from skimage import io
 import torch
 
 #%% user setup
-stage_of_interest = ['prophase', 'metaphase', 'telophase']
+stage_of_interest = ['anaphase',
+                    #  'blurry',
+                     'interphase',
+                     'metaphase',
+                     'prometaphase',
+                     'prophase',
+                     'telophase']
 thresh = 0.0
 
-folder_to_watch = '/home/nel/Desktop/Smart Micro/full_pipeline_yolo_test/watch folder'
+folder_to_watch = '/path/to/folder_to_watch'
 
 # YOLO paths
-path_to_yolo_repo = '/home/nel/Software/yolov5'
-path_to_weights = '/home/nel/Software/yolov5/runs/train/exp20/weights/best.pt'
+path_to_weights = '/path/to/yolo_weights.pt'
 
 # delay in seconds between checking folder
 delay = 5
-
-'''
-WIP, possible to stitch stack?
-YOLO is trained on 800x800 images so will not perform on stitched images
-for now , stitch should be set to False
-'''
-# stitch stack
-stitch = False
-overlap = 255
 
 # visualize results
 visualize_results = False
@@ -56,7 +45,7 @@ set_thresh = False
 set_thresh_thresh = 0.1
 
 #%% model setup
-nn_model = torch.hub.load(path_to_yolo_repo, 'custom', path=path_to_weights, source='local')
+nn_model = torch.hub.load('ultralytics/yolov5', 'custom', path=path_to_weights)
 
 # ensure stage_of_interest is a list and check for valid inputs
 stage_of_interest = list(stage_of_interest)
@@ -97,7 +86,6 @@ else:
 
 #%% pipeline
 def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
-                 stitch = False, overlap = 255,
                  viz=False, store_csv=False,
                  thresh_folder=False, set_thresh_thresh=0.1):
         
@@ -108,36 +96,6 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     if raw.ndim == 2:
         individual = True
         raw = raw[np.newaxis,...]
-    # convert stack to stitch 
-    elif stitch:
-        individual = True
-        im_per_ax = int(np.sqrt(raw.shape[0]))
-        
-        # init stitch array with correct dtype
-        stitched_im = np.zeros([im_per_ax*ax for ax in raw.shape[1:]])   
-    
-        idx = 0
-        for row in range(im_per_ax):
-            for col in range(im_per_ax):
-    
-                # must flip horizontally to read image properly
-                im = raw[idx][:,::-1]
-                
-                row_start = row*(im.shape[0]-overlap)
-                row_end = row_start+im.shape[0]
-    
-                col_start = col*(im.shape[1]-overlap)
-                col_end = col_start+im.shape[1]
-    
-                stitched_im[row_start:row_end, col_start:col_end] = im
-                
-                idx += 1
-                
-        raw = stitched_im[0:row_end,0:col_end]
-        
-        # add extra dimension
-        raw = raw[np.newaxis,...]
-    
     else:
         individual = False
     
@@ -239,15 +197,9 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
             fig = plt.figure()
             count = 1
             for (_, idx, cx, cy, _, name, _, _) in all_info:
-                '''
-                WIP, need to update if multiple files passed in
-                '''
-                if stitch:
-                    im = raw
-                else:
-                    im = io.imread(files)
-                    if idx >= 0:
-                        im = im[int(idx)]
+                im = io.imread(files)
+                if idx >= 0:
+                    im = im[int(idx)]
                                                         
                 ax = fig.add_subplot(n,n,count)
                 ax.set_title(f'{os.path.basename(files)} {idx} {name}')
@@ -285,7 +237,6 @@ while True:
         # print('----------------------------')
         start = time.time()
         cell_found = run_pipeline(files_analyzed, nn_model, stage_of_interest, thresh, results_csv,
-                                  stitch=stitch, overlap=overlap,
                                   viz=visualize_results, store_csv=all_found_cells_csv,
                                   thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
         

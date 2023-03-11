@@ -25,22 +25,22 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TensorFlow error message abou
 JN = False
 
 # initials of annotator
-ANNOTATOR_INITIALS = 'MC'
-
-# boolean to use pre-filtered file list
-prefiltered = True
-# path to pre-filtered file list
-path_to_prefiltered_files = '/home/nel-lab/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles/data_1_preprocessed.npy'
+ANNOTATOR_INITIALS = 'JT'
 
 # boolean to use automatic neural network filter
-nn_filter = False
+nn_filter = True
 # path to neural network filter (should be *.hdf5)
-path_to_nn_filter = ''
+path_to_nn_filter = '/path/to/annotator_filter.hdf5'
 # threshold confidence to classify "unique" cells/automatically filter tiles
 filter_thresh = 0.7
 
+# boolean to use pre-filtered file list
+prefiltered = False
+# path to pre-filtered file list
+path_to_prefiltered_files = ''
+
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_data = '/home/nel/Desktop/Smart Micro/ANNOTATOR TEST/Cellpose_tiles'
+path_to_data = '/path/to/Cellpose_tiles'
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
