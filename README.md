@@ -10,6 +10,7 @@ Install correct PyTorch version from [here](https://pytorch.org/get-started/loca
 ```
 conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch -c nvidia
 ```
+> It can be tricky to install compatible pytorch and torchvision versions with your current CUDA install. The above instructions worked on a Linux machine running Ubuntu 18.04 with an NVIDIA GeForce RTX 2080 Ti, CUDA version 11.1. To demo our pipeline, check out our Google Colab linked below.
 
 ```full_pipeline_YOLO.py``` watches a user-designated folder (```folder_to_watch```), waiting for tif files from microscope to populate folder before sending out for analysis. ```stage_of_interest``` dictate which cell phases YOLO should be on the lookout for (YOLO was trained to recognize the following phases: ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']). Our trained YOLO weights can be found [here](DROPBOX!!!). The pipeline stores results of its analysis to a csv (results_{DATE}.csv) within the watch folder. This csv contains cell-by-cell results with the following format (columns):
 > [file name, slice (if using a tiff stack), x cell center coordinate, y cell center coordinate, YOLO confidence score, cell phase/label, x cell center coordinate relative to center of image, y cell center coordinate relative to center of image]
@@ -29,6 +30,6 @@ A demo of the YOLO pipeline can be found on [Google Colab](https://colab.researc
 Demo tiles that are ready for annotation can be found [here](DROPBOX!!!). In order to generate tiles for annotation, tifs were first processed through [Cellpose](https://github.com/MouseLand/cellpose) to segment out individual cells.
 
 # Notes
-For those interested in training custom YOLO models from annotated cell data, a helper script (```yolo_create_dataset.py```) is provided for converting annotated cells to YOLO training data format (for more info, see [here](https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data#12-create-labels-1)
+For those interested in training custom YOLO models from annotated cell data, a helper script (```yolo_create_dataset.py```) is provided for converting annotated cells to YOLO training data format (for more info, see [here](https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data)).
 
 Manually annotated cell data available upon request
