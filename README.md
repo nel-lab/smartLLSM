@@ -7,12 +7,14 @@ Installation should only take a few minutes (<10). Consider using [mamba](https:
 
 Demo our software in Google Colab (see links below). Demo runtime is around three minutes. The annotator demo can be stopped at any time by pressing 'q' when prompted to annotate a cell).
 
+Demo files (.zip) and model weights (.pt/.hdf5) can be downloaded [here](https://www.dropbox.com/s/2xwfox4e8mg0jhv/smartLLSM%20Demo%20Data.zip?dl=0&file_subpath=%2FsmartLLSM+Demo+Data).
+
 ## YOLO Pipeline
 
 YOLO Pipeline Demo:
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11YKXvFOAEAKNaunR0JqvFjqtqKtBgaHX?usp=sharing), download demo files [here](https://drive.google.com/drive/folders/1kGUbSdDD1E2v7K3tW5L7n0x-9O6WvIlo?usp=share_link).
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11YKXvFOAEAKNaunR0JqvFjqtqKtBgaHX?usp=sharing), download demo files [here](https://www.dropbox.com/s/2xwfox4e8mg0jhv/smartLLSM%20Demo%20Data.zip?dl=0&file_subpath=%2FsmartLLSM+Demo+Data%2FYOLO_demo.zip).
 
-Download trained YOLO weights [here](https://drive.google.com/file/d/1vQa8d6ZsTgpnkU2ERViVr2CnBNcf_QtS/view?usp=share_link).
+Download trained YOLO weights [here](https://www.dropbox.com/s/2xwfox4e8mg0jhv/smartLLSM%20Demo%20Data.zip?dl=0&file_subpath=%2FsmartLLSM+Demo+Data%2FYOLO_weights.pt).
 
 ### Installation
 
@@ -67,7 +69,7 @@ Other features of the pipeline:
 ## Annotator GUI
 
 Annotator GUI Demo:
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/15XbMJAP2yDOS5VtXgFkwGQYSIqarJQp0?usp=share_link), download demo files [here](https://drive.google.com/drive/folders/1kGUbSdDD1E2v7K3tW5L7n0x-9O6WvIlo?usp=share_link).
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/15XbMJAP2yDOS5VtXgFkwGQYSIqarJQp0?usp=share_link), download demo files [here](https://www.dropbox.com/s/2xwfox4e8mg0jhv/smartLLSM%20Demo%20Data.zip?dl=0&file_subpath=%2FsmartLLSM+Demo+Data%2Fannotation_demo.zip).
 
 ### Installation
 
@@ -90,7 +92,7 @@ conda activate smartLLSM_annotator
 
 ```annotation_gui.py``` provides an efficient script for manually annotating cells. Users can set their own dictionary of keys to label cell phases (```labels_dict```). There are also keys to display the label dictionary (```show_label```), return to a previously labeled cell in the same tile (```back_key```), and exit the GUI (```exit_key```).
 
-In addition, a simple classifier can be used to filter out tiles that do not include mitotic cells (```nn_filter```). This bootstraps the annotation process by only prompting users to label tiles that include rarer mitotic cells. Our trained classifier weights can be found [here](https://drive.google.com/file/d/1hqYLRnyHW1QH0B_a7PDga4dZmvhS4jgH/view?usp=share_link). The annotator is best run in the Spyder IDE but can also be run via Terminal or Jupyter Notebook. 
+In addition, a simple classifier can be used to filter out tiles that do not include mitotic cells (```nn_filter```). This bootstraps the annotation process by only prompting users to label tiles that include rarer mitotic cells. Our trained classifier weights can be found [here](https://www.dropbox.com/s/2xwfox4e8mg0jhv/smartLLSM%20Demo%20Data.zip?dl=0&file_subpath=%2FsmartLLSM+Demo+Data%2Fannotator_filter.hdf5). The annotator is best run in the Spyder IDE but can also be run via Terminal or Jupyter Notebook. 
 
 In order to generate tiles for annotation, raw tifs were first processed through [Cellpose](https://github.com/MouseLand/cellpose) to segment out individual cells, then saved as npy files (file.npy). Final annotated tifs/tiles are saved as an npz (file_annotated.npz) with the following variables:
 
