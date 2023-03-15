@@ -5,7 +5,7 @@ GPU recommended, but not required.
 
 Installation should only take a few minutes (<10). Consider using [mamba](https://mamba.readthedocs.io/en/latest/), a faster drop-in conda replacement, if conda environment creation is taking too long.
 
-Demo our software in Google Colab (see links below). Demo runtime is around three minutes. The annotator demo can be stopped at any time by pressing 'q' when prompted to annotate a cell).
+Demo our software in Google Colab (see links below). Demo runtime is around three minutes. The annotator demo can be stopped at any time by pressing 'q' when prompted to annotate a cell.
 
 Demo files (.zip) and model weights (.pt/.hdf5) can be downloaded [here](https://www.dropbox.com/s/2xwfox4e8mg0jhv/smartLLSM%20Demo%20Data.zip?dl=0&file_subpath=%2FsmartLLSM+Demo+Data).
 
@@ -115,7 +115,7 @@ In order to generate tiles for annotation, raw tifs were first processed through
 ## Notes
 For those interested in training custom YOLO models from annotated cell data, a helper script (```yolo_create_dataset.py```) is provided for converting annotated cells to YOLO training data format (for more info, see [here](https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data)).
 
-Our complete, manually annotated cell data used to train/evaluate YOLO is available upon request.
+Our complete, manually annotated cell dataset used to train/evaluate YOLO is available upon request. This complete dataset (along with the provided trained model weights) is required to reproduce our model evaluation results as stated in our paper utilizing the [val.py script](https://github.com/ultralytics/yolov5/blob/master/val.py) from the YOLO repository.
 
 ## Developers
 * Jimmy Tabet, UNC
