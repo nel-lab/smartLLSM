@@ -11,30 +11,65 @@ from collections import Counter
 import matplotlib.pyplot as plt
 
 stages = ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']
-folder = '/home/nel/Software/yolov5/smart_micro_datasetsv2/labels/test'
+important = ['anaphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']
+
+folder = '/home/nel/Software/yolov5/smart_micro_datasetsv2/labels/train'
 filelist = os.listdir(folder)
+
+'''
+Total Training Cells
+Counter({'interphase': 26284,
+         'blurry': 5787,
+         'metaphase': 631,
+         'prometaphase': 293,
+         'telophase': 542,
+         'prophase': 258,
+         'anaphase': 84})
+'''
+
 # shuffle list
 random.shuffle(filelist)
 
 labels = []
+files = []
 
-for file in filelist[:100]:
+LIMIT = 200
+
+final_dict = Counter(labels)
+
+for file in filelist:
     with open(os.path.join(folder,file)) as f:
         lines = f.readlines()
         # get first entry of each line, the label index
         index = [i.split(' ')[0] for i in lines]
-        # convert to label and append to list
-        labels.extend([stages[int(i)] for i in index])
-          
-dist = Counter(labels)
-print(dist)
+        # convert to label
+        phase = [stages[int(i)] for i in index]
 
+        # check if important cell or mitotic phase limits are reached
+        # flag to ADD image to list
+        ADD = False
+        for k,v in Counter(phase).items():
+            # if phase is not important or limit is reached, pass (ADD = False)
+            if k not in important or final_dict[k]+v > LIMIT:
+                pass
+            # otherwise add to labels (ADD = True)
+            else:
+                ADD = True
+                
+        if ADD:
+            labels.extend(phase)
+            files.append(file)
+        
+        # update final_dict
+        final_dict = Counter(labels)
+
+print(Counter(labels))
+
+# plot training cells distribution
+dist = dict(final_dict.most_common())
 names = list(dist.keys())
 values = list(dist.values())
-
-# a = []
-# for i,j in zip(names,values):
-    # a.append(f'{i}\n{j}')
-
-plt.bar(range(len(dist)), values, tick_label=names)
+a = plt.bar(range(len(dist)), values, tick_label=names)
+plt.bar_label(a)
+plt.title(f'{LIMIT} Cells per Mitotic Phase')
 plt.show()
