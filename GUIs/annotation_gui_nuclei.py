@@ -40,18 +40,18 @@ path_to_nn_filter = ''
 filter_thresh = 0.7
 
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_data = '/Users/jimmytabet/Desktop/CellPoseOutPutTest/'
+path_to_data = '/home/nel/Downloads/CellPoseOutPutTest'
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
 labels_dict = {-1: 'edge',     # automatically detected
-                0: 'blurry',
-                1: 'interphase',
-                2: 'prophase',
-                3: 'prometaphase',
-                4: 'metaphase',
-                5: 'anaphase',
-                6: 'telophase',
+                0: 'same cell',
+                1: 'multi',
+                2: 'mixed',
+                3: 'single',
+                # 4: 'metaphase',
+                # 5: 'anaphase',
+                # 6: 'telophase',
                 7: 'junk',
                 8: 'TBD',
                 9: 'other'}
@@ -72,7 +72,7 @@ exit_key = ['q']
 edge_area_thresh = 0.7
 
 # half of size to show cell
-cell_half_size = 100
+cell_half_size = 250
 
 # half of size to show tile (must be < 800/2=400)
 # set <= 0 to display whole tile
@@ -287,6 +287,8 @@ for tile in tiles:
     membrane = data['img2']
     masks = data['masks']
     outlines = data['outlines']
+    # create dual channel image
+    dual_channel = np.dstack([raw/raw.max(), membrane/membrane.max(), np.zeros(raw.shape)])
 
     # if using filter, check for interesting cells in tile and skip if none found
     if nn_filter and not interesting(model, raw, masks, filter_thresh, filter_col):
@@ -378,8 +380,7 @@ for tile in tiles:
             raw_outline = raw.copy()
             raw_outline[outlines==mask_id] = raw.max()
             raw_outline = raw_outline[show_r1:show_r2,show_c1:show_c2]
-            # make dual-channel image for raw_isolate and don't mask out cell
-            dual_channel = np.dstack([raw/raw.max(), membrane/membrane.max(), np.zeros(raw.shape)])
+            # raw_isolate is dual_channel (don't mask out cell)
             raw_isolate = dual_channel.copy()
             # raw_isolate[masks!=mask_id] = 0
             # resize isolated cell to show with tile
@@ -400,6 +401,8 @@ for tile in tiles:
             
             # stitch left and right windows together
             together = np.concatenate([left_img/left_img.max(), right_img/right_img.max()], axis=1)
+            # convert BGR (cv2 default) to RGB
+            together = together[:,:,::-1]
 
 #---------------------------set up annotator window---------------------------#
 
@@ -559,10 +562,11 @@ for tile in tiles:
             position_path = os.path.dirname(tile)
             position_folder = os.path.basename(position_path)            
             data_folder = os.path.basename(os.path.dirname(position_path))
-            annotated_data_path = os.path.join(results_folder,data_folder)
+            # save annotated data in results_folder
+            annotated_data_path = results_folder
             
             # get finished and results paths
-            results_path = os.path.join(annotated_data_path, position_folder+'_results', file_name[:-7]+'annotated.npz')
+            results_path = os.path.join(annotated_data_path, file_name[:-7]+'annotated.npz')
             finished_path = os.path.join(position_path+'_finished', file_name)
            
             # create results and finished folders if not already created
@@ -579,6 +583,7 @@ for tile in tiles:
             # save annotated info for tile once all cells have been labeled
             save_dict = {'raw': raw,
                          'masks': masks,
+                         'membrane': membrane,
                          'dual_channel': dual_channel,
                          'labels': [labels_dict[j] for j in labels],
                          f'labels_{ANNOTATOR_INITIALS}': [labels_dict[j] for j in labels],
