@@ -36,7 +36,7 @@ confirmed_list.append(redo)
 '''
 
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_data = '/home/nel/NEL-LAB Dropbox/NEL/Datasets/smart_micro/Cellpose_tiles'
+path_to_data = '/home/nel/Downloads/Cellpose_tiles'
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
@@ -109,7 +109,7 @@ for tile in pot_tiles:
     # load annotated data (labels dict and labels)
     with np.load(tile, allow_pickle=True) as data:
         labels_dict_annotated = data['labels_dict'].item()
-        labels_stage = [labels_dict_annotated[i] for i in data['labels']]
+        labels_stage = data['labels'] # [labels_dict_annotated[i] for i in data['labels']]
     
     # add tile if redo in labels for reannotating
     if any(item in redo for item in labels_stage):
@@ -225,7 +225,7 @@ for tile in tiles:
     # load annotated data (labels dict and labels)
     with np.load(tile, allow_pickle=True) as data:
         labels_dict_annotated = data['labels_dict'].item()
-        labels_stage = [labels_dict_annotated[i] for i in data['labels']]
+        labels_stage = data['labels'] # [labels_dict_annotated[i] for i in data['labels']]
 
     # convert labels to use current labels_dict
     labels_dict_tile = labels_dict.copy()
