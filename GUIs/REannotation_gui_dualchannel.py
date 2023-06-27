@@ -29,14 +29,14 @@ JN = False
 RE_RE_annotate = False
 
 # list of IDs to redo
-redo = ['prophase']
+redo = ['single', 'mixed']
 
 '''
 confirmed_list.append(redo)
 '''
 
 # path to data (optionally passed in terminal - use '$(pwd)' to pass pwd)
-path_to_data = '/home/nel/Downloads/Cellpose_tiles'
+path_to_data = '/Users/jimmytabet/Downloads/TEST/'
 
 # labels dictionary
 #!!!!!!!!!!!! WARNING, KEYS MUST BE UNIQUE AND NOT CONTAIN 'temp' !!!!!!!!!!!!#
@@ -222,10 +222,11 @@ exited = False
 
 for tile in tiles:
     
-    # load annotated data (labels dict and labels)
+    # load annotated data (labels dict and labels, and confirmed list)
     with np.load(tile, allow_pickle=True) as data:
         labels_dict_annotated = data['labels_dict'].item()
         labels_stage = data['labels'] # [labels_dict_annotated[i] for i in data['labels']]
+        confirmed = data['confirmed']
 
     # convert labels to use current labels_dict
     labels_dict_tile = labels_dict.copy()
@@ -242,7 +243,8 @@ for tile in tiles:
     # find path identifier to match with original tile
     identifier = [i.split('_') for i in tile.split(os.sep)[-3:]]
     # edit identifier to match Cellpose output
-    identifier[-2][-1] = 'finished'
+    identifier[1] = identifier[0].copy()
+    identifier[1].append('finished')
     if RE_RE_annotate:
         identifier[-1].pop()
     identifier[-1][-1] = 'seg.npy'
@@ -258,10 +260,10 @@ for tile in tiles:
     
     # load Cellpose data (raw image, masks, and outlines)
     data_cellpose = np.load(ref_path, allow_pickle=True).item()
-    raw = data['img']
-    membrane = data['img2']
-    masks = data['masks']
-    outlines = data['outlines']
+    raw = data_cellpose['img']
+    membrane = data_cellpose['img2']
+    masks = data_cellpose['masks']
+    outlines = data_cellpose['outlines']
     # create dual channel image
     dual_channel = np.dstack([raw/raw.max(), membrane/membrane.max(), np.zeros(raw.shape)])
     
@@ -537,32 +539,23 @@ for tile in tiles:
             # convert labels to object np.array (for proper npz saving) if any labels are strings
             if any([isinstance(i,str) for i in labels]):
                 labels = np.array(labels, dtype='object')
+                
+            # save label names
+            new_labels = [labels_dict_tile[j] for j in labels]
 
             # save and move files
             # get file name, position/data paths, and og_backup path
             file_name = os.path.basename(tile)
-            position_path = os.path.dirname(tile)
-            position_folder = os.path.basename(position_path)            
-            data_folder = os.path.basename(os.path.dirname(position_path))
-            backup_data_path = os.path.join(backup_folder,data_folder)
-            backup_path = os.path.join(backup_data_path, position_folder, file_name[:-4]+'_backup.npz')
-           
-            # create backup folders if not already created
-            # backup annotated data folder
-            if not os.path.isdir(backup_data_path):
-                os.makedirs(backup_data_path)
-            # backup annotated position folder
-            if not os.path.isdir(os.path.dirname(backup_path)):
-                os.makedirs(os.path.dirname(backup_path))
+            backup_path = os.path.join(backup_folder, file_name[:-4]+'_backup.npz')
 
             # move original file to backup folder if not RE_RE_annotating
             if not RE_RE_annotate:
                 os.replace(tile, backup_path)
                 # save updated annotated info for tile once all cells have been labeled
                 updated_name = tile[:-4]+'_updated.npz'
-                np.savez(updated_name, raw=raw, membrane=membrane, dual_channel=dual_channel, masks=masks, labels=labels, labels_dict = labels_dict_tile)
+                np.savez(updated_name, raw=raw, masks=masks, membrane=membrane, dual_channel=dual_channel, labels=new_labels, labels_dict = labels_dict_tile, confirmed = confirmed)
             else:
-                np.savez(tile, raw=raw, membrane=membrane, dual_channel=dual_channel, masks=masks, labels=labels, labels_dict = labels_dict_tile)
+                np.savez(tile, raw=raw, masks=masks, membrane=membrane, dual_channel=dual_channel, labels=new_labels, labels_dict = labels_dict_tile, confirmed = confirmed)
 
 
             # print paths
