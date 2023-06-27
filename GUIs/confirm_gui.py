@@ -89,14 +89,15 @@ os.chdir(path_to_data)
 # create potential list of annotated tiles
 print('CREATING LIST OF FILES FOR CONFIRMING...')
 pot_tiles = sorted(glob.glob(os.path.join(path_to_data,'**','*.npz'), recursive=True))
+pot_tiles = [file for file in pot_tiles if not 'og_backup' in file]
 
 # create list of tiles for confirming
 tiles = []
 for tile in pot_tiles:
     # load annotated data (labels dict and labels)
     with np.load(tile, allow_pickle=True) as data:    
-        # add tile if confirm in labels for confirming
-        if any(item in confirm for item in data['labels']):
+        # add tile if confirm in labels for confirming and has not been confirmed yet
+        if any(item for item in data['labels'] if item in confirm and item not in list(data['confirmed'])): #any(item in confirm for item in data['labels']):
             tiles.append(tile)
 
 # create list of reference tiles to confirm
@@ -238,7 +239,7 @@ for tile in tiles:
     print('\''+os.path.relpath(tile, start = 'annotation_results').upper()+'\'')
 
     # get list of mask_ids to confirm
-    confirm_mask_ids = [i+1 for i,lab in enumerate(labels_stage) if lab in confirm]
+    confirm_mask_ids = [i+1 for i,lab in enumerate(labels_stage) if lab in confirm and lab not in confirmed_list]
     
     # find number of cells to confirm
     num_masks = len(confirm_mask_ids)
