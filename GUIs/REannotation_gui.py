@@ -222,10 +222,11 @@ exited = False
 
 for tile in tiles:
     
-    # load annotated data (labels dict and labels)
+    # load annotated data (labels dict and labels, and confirmed list)
     with np.load(tile, allow_pickle=True) as data:
         labels_dict_annotated = data['labels_dict'].item()
         labels_stage = data['labels'] # [labels_dict_annotated[i] for i in data['labels']]
+        confirmed = data['confirmed']
 
     # convert labels to use current labels_dict
     labels_dict_tile = labels_dict.copy()
@@ -530,6 +531,9 @@ for tile in tiles:
             if any([isinstance(i,str) for i in labels]):
                 labels = np.array(labels, dtype='object')
 
+            # save label names
+            new_labels = [labels_dict_tile[j] for j in labels]
+
             # save and move files
             # get file name, position/data paths, and og_backup path
             file_name = os.path.basename(tile)
@@ -552,9 +556,9 @@ for tile in tiles:
                 os.replace(tile, backup_path)
                 # save updated annotated info for tile once all cells have been labeled
                 updated_name = tile[:-4]+'_updated.npz'
-                np.savez(updated_name, raw=raw, masks=masks, labels=labels, labels_dict = labels_dict_tile)
+                np.savez(updated_name, raw=raw, masks=masks, labels=new_labels, labels_dict = labels_dict_tile, confirmed = confirmed)
             else:
-                np.savez(tile, raw=raw, masks=masks, labels=labels, labels_dict = labels_dict_tile)
+                np.savez(tile, raw=raw, masks=masks, labels=new_labels, labels_dict = labels_dict_tile, confirmed = confirmed)
 
 
             # print paths
