@@ -23,14 +23,18 @@ from skimage import io
 import torch
 
 #%% user setup
-stage_of_interest = 'prophase'
-thresh = 0.0
+stage_of_interest = 'synapse'
+thresh = 0.6
 
-folder_to_watch = '/home/nel/Desktop/Smart Micro/full_pipeline_yolo_test/watch_1'
+folder_to_watch = '/home/nel/Downloads/THIS WEEK TCELL/watch_folder_5stack'
 
 # YOLO paths
 path_to_yolo_repo = '/home/nel/Software/yolov5'
-path_to_weights = '/home/nel/Software/yolov5/runs/train/exp20/weights/best.pt'
+path_to_weights = '/home/nel/Downloads/THIS WEEK TCELL/best_include_target.pt'
+
+# Image identifier
+CamA_id = 'CamB_ch0'   # Tcell
+CamB_id = 'CamA_ch1'   # Target cell
 
 # delay in seconds between checking folder
 delay = 5
@@ -47,16 +51,19 @@ overlap = 255
 # visualize results
 visualize_results = False
 
+# store ALL results
+store_all = False
+
 # order cells by score to set thresh
 set_thresh = False
 # minuimum score to show
-set_thresh_thresh = 0.1
+set_thresh_thresh = 0.8
 
 #%% model setup
 nn_model = torch.hub.load('ultralytics/yolov5', 'custom', path=path_to_weights) #torch.hub.load(path_to_yolo_repo, 'custom', path=path_to_weights, source='local')
 
 # check for valid stage_of_interest
-yolo_classes = ['anaphase', 'blurry', 'interphase', 'metaphase', 'prometaphase', 'prophase', 'telophase']
+yolo_classes = ['isolated','synapse','contacting','target']
 if not stage_of_interest in yolo_classes:
     raise ValueError(f'stage_of_interest ({stage_of_interest}) is not valid, please choose from {yolo_classes}')
 
@@ -70,6 +77,18 @@ os.makedirs(os.path.join(folder_to_watch, 'completed', current_date), exist_ok=T
 
 # set folder for finished images
 finished_folder = os.path.join(folder_to_watch, 'completed', current_date)
+
+# set up storage folder
+if store_all:
+    # all_found_cells_csv = os.path.join(folder_to_watch, f'all_found_cells_{current_date}.csv')
+    all_found_cells_csv = os.path.join(finished_folder, f'all_found_cells_{current_date}.csv')
+    # if creating a new file, write yolo classes as file header
+    if not os.path.exists(all_found_cells_csv):
+        with open(all_found_cells_csv, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerows(np.insert(yolo_classes,0,'').reshape([1,-1]))
+else:
+    all_found_cells_csv=False
 
 # set up threshold folder
 if set_thresh:
@@ -87,12 +106,15 @@ postprocess_times = []
 
 def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
                  stitch = False, overlap = 255,
-                 viz=False, thresh_folder=False, set_thresh_thresh=0.1):
+                 viz=False, store_csv=False,
+                 thresh_folder=False, set_thresh_thresh=0.1):
     
     read_start = time.time()
     
     # read in image
-    raw = io.imread(files).astype(float)
+    raw = io.imread(files[0]).astype(float)
+    n_img = len(raw)
+    raw = np.append(raw,io.imread(files[1]).astype(float),axis=0)   
     
     read_times.append(time.time()-read_start)
     
@@ -138,22 +160,27 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     # preprocess raw image
     # convert uint16 to uint8 for yolo
     raw_8bit = ((raw-raw.min(axis=(1,2))[:,None,None])/(raw.max(axis=(1,2))[:,None,None]-raw.min(axis=(1,2))[:,None,None])*(2**8-1)).astype('uint8')
-    raw_8bit = list(raw_8bit) # must be passed as list of images for yolo
+    raw_rgb = np.zeros((n_img,)+raw_8bit.shape[1:]+(3,))
+    raw_rgb[:,:,:,0] = raw_8bit[:n_img,:,:]
+    raw_rgb[:,:,:,1] = raw_8bit[n_img:,:,:]
+    raw_rgb = raw_rgb.astype('uint8')
+    
+    raw_rgb = list(raw_rgb) # must be passed as list of images for yolo
     
     preprocess_times.append(time.time()-preprocess_start)
     
     network_start = time.time()
     
     # forward pass
-    res = nn_model(raw_8bit)
+    res = nn_model(raw_rgb)
         
     network_times.append(time.time() - network_start)
 
     # get output as list of pandas df's
     output = res.pandas().xywh
     
-    postprocess_start = time.time()    
-
+    postprocess_start = time.time()
+    
     # add slice ID
     for i, df in enumerate(output):
         df['slice']=i
@@ -161,20 +188,30 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     # merge output df's
     combined_output = pd.concat(output)
     
-    # print total number of cells found
-    print(f'number of cells found = {combined_output.shape[0]}')
+    # write distribution of cell stages to file 
+    if store_csv:
+        # init counts with file name
+        counts = [os.path.basename(files[0])]
+        # append corresponding cell count for stage in yolo_classes
+        cell_dist = combined_output.name.value_counts()
+        for stage in yolo_classes:
+            if stage in cell_dist.index:
+                counts.append(cell_dist[stage])
+            else:
+                counts.append(0)
+        # write to file
+        with open(store_csv, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerows(np.array(counts).reshape([1,-1]))
     
     # mask only results from correct stage
     combined_output_stage = combined_output[combined_output.name == stage_of_interest]
-    
-    # print total number of stage_of_interest cells found
-    print(f'number of {stage_of_interest} cells found = {combined_output_stage.shape[0]}')
 
     # mask stage output above thresh
     combined_output_thresh = combined_output_stage[combined_output_stage.confidence >= thresh].copy() # .copy() needed to avoid pandas warning
 
     # add file name
-    combined_output_thresh['fname'] = os.path.basename(files)
+    combined_output_thresh['fname'] = os.path.basename(files[0])
 
     # remove slice ID if individual image
     if individual:
@@ -193,7 +230,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
         
         for _,cell in set_thresh_res.iterrows():
             score = cell.confidence
-            half_size = 100
+            half_size = 250
             
             # original bounding box
             r1_o = int(cell.ycenter-half_size)
@@ -208,13 +245,13 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
             c2 = min(raw.shape[2], c2_o)
                         
             # pad new bounding box with constant value (mean, 0, etc.)
-            final = np.zeros([half_size*2, half_size*2], dtype=raw.dtype)
+            final = np.zeros([half_size*2, half_size*2,3], dtype=raw_rgb[0].dtype)
             
             # store original bb in new bb
-            final[r1-r1_o:r2-r1_o,c1-c1_o:c2-c1_o] = raw[cell.slice, r1:r2,c1:c2]
+            final[r1-r1_o:r2-r1_o,c1-c1_o:c2-c1_o,:] = raw_rgb[cell.slice][r1:r2,c1:c2,:]
             
             # save to thresh_folder
-            matplotlib.image.imsave(os.path.join(thresh_folder, str(round(score*100, 1))+'.tiff'), final, cmap='gray')
+            matplotlib.image.imsave(os.path.join(thresh_folder, cell['name']+str(round(score*100, 2))+'.tiff'), final)
     
     # write cell centroid to results csv
     if all_info.size:
@@ -234,12 +271,12 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
                 if stitch:
                     im = raw
                 else:
-                    im = io.imread(files)
+                    im = io.imread(files[0])
                     if idx >= 0:
                         im = im[int(idx)]
                                                         
                 ax = fig.add_subplot(n,n,count)
-                ax.set_title(f'{os.path.basename(files)} {idx}')
+                ax.set_title(f'{os.path.basename(files[0])} {idx}')
                 ax.axis('off')
                 ax.imshow(im.squeeze(), cmap='gray',
                           vmin=np.percentile(im,1), vmax=np.percentile(im,99))
@@ -255,7 +292,7 @@ def run_pipeline(files, nn_model, stage_of_interest, thresh, results_csv,
     else:
         with open(results_csv, 'a') as f:
             writer = csv.writer(f)
-            writer.writerows(np.array(os.path.basename(files)).reshape([-1,1]))
+            writer.writerows(np.array(os.path.basename(files[0])).reshape([-1,1]))
         
         postprocess_times.append(time.time() - postprocess_start)
         return False
@@ -267,36 +304,44 @@ times = []
 
 while True:
     # look for files
-    files_all = sorted(glob.glob(os.path.join(folder_to_watch,'**','*.tif'), recursive=True))
-    files_all = [file for file in files_all if not 'completed' in file]
+    files_all_CamA = sorted(glob.glob(os.path.join(folder_to_watch,'*'+CamA_id+'*.tif'), recursive=True))
+    files_all_CamA = [file for file in files_all_CamA if not 'completed' in file]
+    
+    
+    files_all_CamB = sorted(glob.glob(os.path.join(folder_to_watch,'*'+CamB_id+'*.tif'), recursive=True))
+    files_all_CamB = [file for file in files_all_CamB if not 'completed' in file]    
+    
     
     # files_analyzed = files_all[:BATCH_SIZE]
     
     # if len(files_all) >= BATCH_SIZE:
-    if files_all:
-        files_analyzed = files_all[0]
+    if files_all_CamA:
+        file_CamA = files_all_CamA[0]
+        file_CamB = files_all_CamB[0]
+        files_analyzed = [file_CamA,file_CamB]
         # print('----------------------------')
         start = time.time()
         cell_found = run_pipeline(files_analyzed, nn_model, stage_of_interest, thresh, results_csv,
                                   stitch=stitch, overlap=overlap,
-                                  viz=visualize_results, thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
+                                  viz=visualize_results, store_csv=all_found_cells_csv,
+                                  thresh_folder=thresh_folder, set_thresh_thresh=set_thresh_thresh)
         
         times.append(time.time()-start)
-        
         print(f'cell found: {cell_found}')
         print(f'pipeline time: {time.time()-start}')
         print('----------------------------')
         
         # move files to completed folder
-        os.replace(files_analyzed, os.path.join(finished_folder, os.path.basename(files_analyzed)))
+        os.replace(file_CamA, os.path.join(finished_folder, os.path.basename(file_CamA)))
+        os.replace(file_CamB, os.path.join(finished_folder, os.path.basename(file_CamB)))
         
         if len(times)>=5:
             raise ValueError
               
     else:
-        print(f'waiting for files...{len(files_all)} file(s)  time: {time.time()-start_loop_time}', end='\r') #end='\r' will prevent generating a new line and will overwrite this line over and over
+        print(f'waiting for files...{len(files_all_CamA)} file(s)  time: {time.time()-start_loop_time}', end='\r') #end='\r' will prevent generating a new line and will overwrite this line over and over
         time.sleep(delay)
-        
+
 #%% timing
 import matplotlib
 matplotlib.rcParams['pdf.fonttype'] = 42
@@ -316,6 +361,6 @@ plt.legend()
 plt.xlabel('Time (s)')
 plt.xlim([0, rt+pt+nt+ppt])
 plt.yticks([])
-plt.title(f'YOLO Pipeline Time for 1 TIF Stack (1 tile)\nTotal Pipeline = {(rt+pt+nt+ppt).round(3)} s')
+plt.title(f'YOLO Pipeline Time for 1 TIF Stack (100 tiles)\nTotal Pipeline = {(rt+pt+nt+ppt).round(3)} s')
 #%%
-plt.savefig('/home/nel/Desktop/mitotic_timing_1.pdf', dpi=300, transparent=True)
+# plt.savefig('/home/nel/Desktop/tcell_timing_stack.pdf', dpi=300, transparent=True)
